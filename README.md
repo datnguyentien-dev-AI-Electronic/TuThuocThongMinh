@@ -18,7 +18,7 @@ Tủ Thuốc Thông Minh là hệ thống hỗ trợ quản lý lịch uống th
 - Database: SQLite
 - Xử lý ảnh: OpenCV, MediaPipe, NumPy
 - Giao diện: HTML, CSS, JavaScript
-- Phần cứng: ESP32/ESP8266, ESP32-CAM
+- Phần cứng: ESP32, ESP32-CAM
 
 ## Cấu Trúc Dự Án
 
