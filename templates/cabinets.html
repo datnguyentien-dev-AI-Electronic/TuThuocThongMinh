@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quản lý tủ thuốc — SmartMed</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Quicksand:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    body { background: linear-gradient(135deg, #F0FFFE 0%, #DFF9F8 100%); min-height: 100vh; padding: 32px 20px; }
+
+    .cab-page { max-width: 960px; margin: 0 auto; }
+
+    .cab-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 36px; }
+    .cab-logo { display: flex; align-items: center; gap: 14px; }
+    .cab-logo-icon { width: 52px; height: 52px; background: linear-gradient(135deg, #4ECDC4, #2BB5AB); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 8px 20px rgba(78,205,196,0.35); }
+    .cab-logo-text { font-family: 'Quicksand', sans-serif; font-size: 22px; font-weight: 700; color: #2C3E50; }
+    .cab-logo-sub { font-size: 12px; color: #6B8EA4; margin-top: 1px; }
+
+    .btn-add-cabinet {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 22px;
+      background: linear-gradient(135deg, #4ECDC4, #2BB5AB);
+      color: white; border: none; border-radius: 14px;
+      font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 700;
+      cursor: pointer; transition: all 0.25s;
+      box-shadow: 0 6px 18px rgba(78,205,196,0.35);
+    }
+    .btn-add-cabinet:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(78,205,196,0.45); }
+
+    .cab-section-title {
+      font-size: 12px; font-weight: 700; color: #6B8EA4;
+      text-transform: uppercase; letter-spacing: 1px;
+      margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+    .cab-section-title::after { content: ''; flex: 1; height: 1px; background: #D8F2F0; }
+
+    /* Cabinet grid */
+    .cab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 40px; }
+
+    .cab-card {
+      background: white; border-radius: 22px; padding: 22px;
+      box-shadow: 0 4px 20px rgba(78,205,196,0.1);
+      border: 2px solid transparent;
+      transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+      position: relative; overflow: hidden;
+      cursor: pointer;
+    }
+    .cab-card:hover { transform: translateY(-4px); box-shadow: 0 12px 36px rgba(78,205,196,0.2); border-color: #B2EBE8; }
+    .cab-card.active-card {
+      border-color: #4ECDC4;
+      background: linear-gradient(145deg, #FAFFFF, #ECFFFE);
+      box-shadow: 0 8px 32px rgba(78,205,196,0.25);
+    }
+
+    .cab-card-glow {
+      position: absolute; top: -30px; right: -30px;
+      width: 100px; height: 100px;
+      background: radial-gradient(circle, rgba(78,205,196,0.15) 0%, transparent 70%);
+      border-radius: 50%; pointer-events: none;
+    }
+
+    .cab-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+
+    .cab-icon {
+      width: 46px; height: 46px;
+      background: linear-gradient(135deg, #E8FAF9, #C8F0ED);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+    .cab-card.active-card .cab-icon { background: linear-gradient(135deg, #4ECDC4, #2BB5AB); }
+
+    .cab-active-badge {
+      display: none; align-items: center; gap: 4px;
+      background: #E8FDF5; color: #27AE60;
+      font-size: 10px; font-weight: 700;
+      padding: 4px 9px; border-radius: 20px;
+      border: 1.5px solid #A3E4C8;
+    }
+    .cab-card.active-card .cab-active-badge { display: flex; }
+
+    .cab-card-name { font-size: 17px; font-weight: 800; color: #2C3E50; margin-bottom: 6px; }
+    .cab-card-ip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #F5F5F5; border-radius: 8px;
+      padding: 4px 10px; font-size: 12px; font-weight: 700;
+      color: #555; font-family: monospace; margin-bottom: 16px;
+    }
+
+    .cab-card-status { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #CCC; transition: background 0.3s; }
+    .status-dot.online { background: #2ECC71; box-shadow: 0 0 6px #2ECC71; animation: pulse 2s infinite; }
+    .status-dot.offline { background: #E74C3C; }
+    .status-text { font-size: 12px; font-weight: 600; color: #888; }
+
+    .cab-card-actions { display: flex; gap: 8px; }
+
+    .btn-select-cab {
+      flex: 1; padding: 9px; border-radius: 10px; border: none;
+      background: linear-gradient(135deg, #4ECDC4, #2BB5AB);
+      color: white; font-family: 'Nunito', sans-serif;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-select-cab:hover { opacity: 0.9; transform: translateY(-1px); }
+    .cab-card.active-card .btn-select-cab { background: linear-gradient(135deg, #27AE60, #1E8449); }
+
+    .btn-cab-edit, .btn-cab-del {
+      width: 36px; height: 36px; border-radius: 10px;
+      border: 1.5px solid #E0E0E0; background: white;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 15px; transition: all 0.2s;
+    }
+    .btn-cab-edit:hover { border-color: #4ECDC4; background: #E8FAF9; }
+    .btn-cab-del:hover { border-color: #FF6B6B; background: #FFF0EE; }
+
+    /* Empty state */
+    .cab-empty {
+      text-align: center; padding: 60px 20px;
+      background: white; border-radius: 24px;
+      box-shadow: 0 4px 20px rgba(78,205,196,0.08);
+      margin-bottom: 24px;
+    }
+    .cab-empty-icon { font-size: 64px; margin-bottom: 16px; opacity: 0.5; }
+    .cab-empty h2 { font-size: 20px; font-weight: 800; color: #2C3E50; margin-bottom: 8px; }
+    .cab-empty p { font-size: 14px; color: #6B8EA4; margin-bottom: 24px; }
+
+    /* Modal */
+    .modal-bg {
+      position: fixed; inset: 0;
+      background: rgba(44,62,80,0.55); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; opacity: 0; pointer-events: none; transition: all 0.3s;
+    }
+    .modal-bg.open { opacity: 1; pointer-events: all; }
+
+    .modal-box {
+      background: white; border-radius: 26px; width: 440px; max-width: 90vw;
+      padding: 32px; box-shadow: 0 32px 80px rgba(0,0,0,0.2);
+      transform: translateY(30px) scale(0.95);
+      transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .modal-bg.open .modal-box { transform: translateY(0) scale(1); }
+
+    .modal-title { font-size: 20px; font-weight: 800; color: #2C3E50; margin-bottom: 6px; }
+    .modal-sub { font-size: 13px; color: #6B8EA4; margin-bottom: 24px; }
+
+    .field-label { font-size: 11px; font-weight: 700; color: #6B8EA4; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; display: block; }
+    .field-input {
+      width: 100%; padding: 13px 16px; border-radius: 12px;
+      border: 2px solid #E0F2F1; background: white;
+      font-family: 'Nunito', sans-serif; font-size: 15px; font-weight: 600;
+      color: #2C3E50; outline: none; transition: all 0.3s; margin-bottom: 16px;
+    }
+    .field-input:focus { border-color: #4ECDC4; box-shadow: 0 0 0 4px rgba(78,205,196,0.12); }
+
+    .modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+    .btn-modal-cancel {
+      flex: 1; padding: 12px; border-radius: 12px;
+      border: 1.5px solid #E0E0E0; background: white;
+      font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 700;
+      color: #6B8EA4; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-modal-cancel:hover { background: #F5F5F5; }
+    .btn-modal-save {
+      flex: 2; padding: 12px; border-radius: 12px; border: none;
+      background: linear-gradient(135deg, #4ECDC4, #2BB5AB);
+      font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 700;
+      color: white; cursor: pointer; transition: all 0.2s;
+      box-shadow: 0 6px 16px rgba(78,205,196,0.35);
+    }
+    .btn-modal-save:hover { opacity: 0.92; transform: translateY(-1px); }
+
+    .toast-cab {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(60px);
+      background: #2C3E50; color: white; padding: 12px 22px;
+      border-radius: 14px; font-size: 13px; font-weight: 600;
+      z-index: 9999; transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1);
+      pointer-events: none; white-space: nowrap; box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .toast-cab.show { transform: translateX(-50%) translateY(0); }
+
+    @keyframes pulse {
+      0%,100% { opacity:1; transform:scale(1); }
+      50% { opacity:0.5; transform:scale(0.8); }
+    }
+    .fade-up { animation: fadeUp 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(24px); }
+      to { opacity:1; transform:translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="cab-page">
+
+  <!-- Top bar -->
+  <div class="cab-topbar fade-up">
+    <div class="cab-logo">
+      <div class="cab-logo-icon">💊</div>
+      <div>
+        <div class="cab-logo-text">SmartMed</div>
+        <div class="cab-logo-sub">Hệ thống quản lý tủ thuốc thông minh</div>
+      </div>
+    </div>
+    <button class="btn-add-cabinet" onclick="openModal()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Thêm tủ thuốc
+    </button>
+  </div>
+
+  <!-- Section title -->
+  <div class="cab-section-title">
+    📦 Danh sách tủ thuốc ({{ cabinets|length }})
+  </div>
+
+  <!-- Cabinet grid -->
+  {% if cabinets %}
+  <div class="cab-grid" id="cab-grid">
+    {% for cab in cabinets %}
+    <div class="cab-card {% if cab.id == active_id %}active-card{% endif %} fade-up" id="card-{{ cab.id }}" style="animation-delay: {{ loop.index0 * 0.07 }}s">
+      <div class="cab-card-glow"></div>
+      <div class="cab-card-header">
+        <div class="cab-icon">{% if cab.id == active_id %}🟢{% else %}🗄️{% endif %}</div>
+        <div class="cab-active-badge"><div class="status-dot online"></div> Đang chọn</div>
+      </div>
+      <div class="cab-card-name">{{ cab.name }}</div>
+      <div class="cab-card-ip">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        {{ cab.ip }}
+      </div>
+      <div class="cab-card-status">
+        <div class="status-dot" id="dot-{{ cab.id }}"></div>
+        <span class="status-text" id="status-{{ cab.id }}">Đang kiểm tra...</span>
+      </div>
+      <div class="cab-card-actions">
+        <button class="btn-select-cab" onclick="selectCabinet('{{ cab.id }}', '{{ cab.name }}')">
+          {% if cab.id == active_id %}✅ Đang sử dụng{% else %}🔌 Chọn tủ này{% endif %}
+        </button>
+        <button class="btn-cab-edit" title="Sửa" onclick="openEditModal('{{ cab.id }}', '{{ cab.name }}', '{{ cab.ip }}')">✏️</button>
+        <button class="btn-cab-del" title="Xóa" onclick="deleteCabinet('{{ cab.id }}', '{{ cab.name }}')">🗑️</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="cab-empty fade-up">
+    <div class="cab-empty-icon">📭</div>
+    <h2>Chưa có tủ thuốc nào</h2>
+    <p>Nhấn "+ Thêm tủ thuốc" để đăng ký tủ đầu tiên trong mạng LAN</p>
+    <button class="btn-add-cabinet" onclick="openModal()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Thêm tủ thuốc đầu tiên
+    </button>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal-bg" id="modal-bg" onclick="closeModalOutside(event)">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title-text">➕ Thêm tủ thuốc mới</div>
+    <div class="modal-sub">Nhập tên và địa chỉ IP của tủ trong mạng LAN</div>
+    <input type="hidden" id="edit-cab-id" value="">
+    <label class="field-label">Tên tủ thuốc *</label>
+    <input class="field-input" id="f-cab-name" placeholder="VD: Phòng bệnh 101, Tủ phòng khách..." autocomplete="off">
+    <label class="field-label">Địa chỉ IP *</label>
+    <input class="field-input" id="f-cab-ip" placeholder="VD: 192.168.1.15" autocomplete="off">
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeModal()">Hủy</button>
+      <button class="btn-modal-save" id="modal-save-btn" onclick="saveCabinet()">💾 Lưu tủ</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-cab" id="toast-cab"></div>
+
+<script>
+  const ACTIVE_ID = "{{ active_id }}";
+
+  // ── Modal ──────────────────────────────────────────
+  function openModal() {
+    document.getElementById('edit-cab-id').value = '';
+    document.getElementById('f-cab-name').value = '';
+    document.getElementById('f-cab-ip').value = '';
+    document.getElementById('modal-title-text').textContent = '➕ Thêm tủ thuốc mới';
+    document.getElementById('modal-save-btn').textContent = '💾 Lưu tủ';
+    document.getElementById('modal-bg').classList.add('open');
+    setTimeout(() => document.getElementById('f-cab-name').focus(), 300);
+  }
+
+  function openEditModal(id, name, ip) {
+    document.getElementById('edit-cab-id').value = id;
+    document.getElementById('f-cab-name').value = name;
+    document.getElementById('f-cab-ip').value = ip;
+    document.getElementById('modal-title-text').textContent = '✏️ Sửa thông tin tủ';
+    document.getElementById('modal-save-btn').textContent = '💾 Cập nhật';
+    document.getElementById('modal-bg').classList.add('open');
+    setTimeout(() => document.getElementById('f-cab-name').focus(), 300);
+  }
+
+  function closeModal() { document.getElementById('modal-bg').classList.remove('open'); }
+  function closeModalOutside(e) { if (e.target === document.getElementById('modal-bg')) closeModal(); }
+
+  // Enter to save
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.getElementById('modal-bg').classList.contains('open')) saveCabinet();
+    if (e.key === 'Escape') closeModal();
+  });
+
+  // ── Save (Add or Edit) ─────────────────────────────
+  async function saveCabinet() {
+    const id = document.getElementById('edit-cab-id').value;
+    const name = document.getElementById('f-cab-name').value.trim();
+    const ip = document.getElementById('f-cab-ip').value.trim();
+    if (!name || !ip) { showToast('⚠️ Vui lòng nhập đầy đủ tên và IP'); return; }
+
+    const url = id ? `/api/cabinets/edit/${id}` : '/api/cabinets/add';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name, ip})
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      showToast(id ? '✅ Đã cập nhật thông tin tủ' : '✅ Đã thêm tủ thuốc mới');
+      closeModal();
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showToast('❌ ' + (data.message || 'Có lỗi xảy ra'));
+    }
+  }
+
+  // ── Select cabinet ──────────────────────────────────
+  async function selectCabinet(id, name) {
+    const res = await fetch(`/api/cabinets/select/${id}`, {method: 'POST'});
+    const data = await res.json();
+    if (data.status === 'ok') {
+      showToast(`🔌 Đã chọn: ${name}`);
+      setTimeout(() => window.location.href = '/cabinet', 900);
+    }
+  }
+
+  // ── Delete ──────────────────────────────────────────
+  async function deleteCabinet(id, name) {
+    if (!confirm(`Xóa tủ "${name}"?\nHành động này không thể hoàn tác.`)) return;
+    const res = await fetch(`/api/cabinets/delete/${id}`, {method: 'DELETE'});
+    const data = await res.json();
+    if (data.status === 'ok') {
+      showToast('🗑️ Đã xóa tủ thuốc');
+      setTimeout(() => location.reload(), 700);
+    }
+  }
+
+  // ── Ping all ────────────────────────────────────────
+  async function pingAll() {
+    try {
+      const res = await fetch('/api/cabinets/ping_all');
+      const results = await res.json();
+      for (const [id, info] of Object.entries(results)) {
+        const dot = document.getElementById(`dot-${id}`);
+        const txt = document.getElementById(`status-${id}`);
+        if (dot && txt) {
+          dot.className = 'status-dot ' + (info.online ? 'online' : 'offline');
+          txt.textContent = info.online ? 'Đang online' : 'Không kết nối';
+          txt.style.color = info.online ? '#27AE60' : '#E74C3C';
+        }
+      }
+    } catch(e) {}
+  }
+
+  // ── Toast ────────────────────────────────────────────
+  function showToast(msg) {
+    const t = document.getElementById('toast-cab');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  // Ping on load
+  window.addEventListener('load', () => setTimeout(pingAll, 300));
+</script>
+</body>
+</html>

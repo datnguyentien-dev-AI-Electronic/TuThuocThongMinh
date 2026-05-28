@@ -1,0 +1,265 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medicine Schedule Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Decorative Background Shapes + Navbar + Hero -->
+    <div class="bg-shape shape-1"></div>
+    <div class="bg-shape shape-2"></div>
+    <div class="bg-shape shape-3"></div>
+
+    <nav class="navbar navbar-expand-lg navbar-glass fixed-top">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <i class="bi bi-capsule me-2 text-primary"></i>
+                <span>MedicineBox</span>
+            </a>
+            <div class="nav-actions d-flex align-items-center gap-3">
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-nav" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
+                        <i class="bi bi-bell"></i>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end p-2" style="min-width: 280px; max-height: 320px; overflow:auto;">
+                        <div id="notificationList" class="small text-muted px-1 py-2">No notifications yet</div>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-nav" id="themeToggleBtn" title="Switch theme">
+                    <i class="bi bi-moon-stars"></i>
+                </button>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-nav" data-bs-toggle="dropdown" aria-expanded="false" title="Settings">
+                        <i class="bi bi-gear"></i>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 260px;">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="enableNotifications" checked>
+                            <label class="form-check-label" for="enableNotifications">
+                                <i class="bi bi-bell"></i> Enable notifications
+                            </label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="enableSound" checked>
+                            <label class="form-check-label" for="enableSound">
+                                <i class="bi bi-volume-up"></i> Notification sound
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Notification Area -->
+    <div id="notificationArea"></div>
+
+    <div class="container mt-4">
+    <h1 class="text-center mb-4">
+            <i class="bi bi-heart-pulse"></i> Medicine Schedule Management
+        </h1>
+
+        <!-- Navigation Tabs -->
+    <div class="card glass">
+            <div class="card-body">
+                <ul class="nav nav-pills nav-fill mb-3" id="pills-tab" role="tablist">
+                    <li class="nav-item" role="presentation">
+            <button class="nav-link active fancy-pill" id="pills-schedule-tab" data-bs-toggle="pill" 
+                                data-bs-target="#pills-schedule" type="button" role="tab">
+                            <i class="bi bi-calendar3"></i> Schedule
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+            <button class="nav-link fancy-pill" id="pills-history-tab" data-bs-toggle="pill" 
+                                data-bs-target="#pills-history" type="button" role="tab">
+                            <i class="bi bi-clock-history"></i> History
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+            <button class="nav-link fancy-pill" id="pills-missed-tab" data-bs-toggle="pill" 
+                                data-bs-target="#pills-missed" type="button" role="tab">
+                            <i class="bi bi-exclamation-triangle"></i> Missed
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+            <button class="nav-link fancy-pill" id="pills-settings-tab" data-bs-toggle="pill" 
+                                data-bs-target="#pills-settings" type="button" role="tab">
+                            <i class="bi bi-gear"></i> Schedule Settings
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="pills-tabContent">
+                    <!-- Schedule Tab -->
+                    <div class="tab-pane fade show active" id="pills-schedule" role="tabpanel">
+                        <div class="row">
+                            <div class="col-12">
+                                <div id="nextDoseBanner" class="mb-3"></div>
+                                <h4 class="section-title"><i class="bi bi-calendar-check"></i> Today's Schedule</h4>
+                                <div id="scheduleContainer">
+                                    <!-- Schedule items will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- History Tab -->
+                    <div class="tab-pane fade" id="pills-history" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4><i class="bi bi-clock-history"></i> Medicine History</h4>
+                            <div class="d-flex gap-2">
+                                <input type="date" id="historyDate" class="form-control" style="width: auto;">
+                                <button class="btn btn-primary" onclick="loadHistoryByDate()">
+                                    <i class="bi bi-search"></i> Search
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="loadHistory()">
+                                    <i class="bi bi-arrow-clockwise"></i> All
+                                </button>
+                                
+                            </div>
+                        </div>
+                        <div id="historyContainer">
+                            <!-- History items will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Missed Tab -->
+                    <div class="tab-pane fade" id="pills-missed" role="tabpanel">
+                        <h4><i class="bi bi-exclamation-triangle text-danger"></i> Missed History</h4>
+                        <div id="missedContainer">
+                            <!-- Missed items will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Settings Tab -->
+                    <div class="tab-pane fade" id="pills-settings" role="tabpanel">
+                        <h4><i class="bi bi-gear"></i> Schedule Settings</h4>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card glass">
+                                    <div class="card-header">
+                                        <h5><i class="bi bi-clock"></i> Time Slots</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <form id="scheduleForm">
+                                            <div class="settings-grid">
+                                                <div class="time-tile">
+                                                    <div class="tile-header">
+                                                        <div class="tile-icon"><i class="bi bi-sunrise"></i></div>
+                                                        <div class="tile-label">Morning</div>
+                                                        <span class="badge badge-enabled d-none" id="morningStatusOn">Enabled</span>
+                                                        <span class="badge badge-disabled d-none" id="morningStatusOff">Disabled</span>
+                                                    </div>
+                                                    <div class="tile-body">
+                                                        <div class="input-group input-group-sm mb-2">
+                                                            <span class="input-group-text"><i class="bi bi-clock"></i></span>
+                                                            <input type="time" class="form-control time-input" id="morningTime" value="07:00">
+                                                        </div>
+                                                        <div class="form-check form-switch mb-0">
+                                                            <input class="form-check-input" type="checkbox" id="morningEnabled">
+                                                            <label class="form-check-label small" for="morningEnabled">Enable slot</label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="time-tile">
+                                                    <div class="tile-header">
+                                                        <div class="tile-icon"><i class="bi bi-sun"></i></div>
+                                                        <div class="tile-label">Noon</div>
+                                                        <span class="badge badge-enabled d-none" id="noonStatusOn">Enabled</span>
+                                                        <span class="badge badge-disabled d-none" id="noonStatusOff">Disabled</span>
+                                                    </div>
+                                                    <div class="tile-body">
+                                                        <div class="input-group input-group-sm mb-2">
+                                                            <span class="input-group-text"><i class="bi bi-clock"></i></span>
+                                                            <input type="time" class="form-control time-input" id="noonTime" value="12:00">
+                                                        </div>
+                                                        <div class="form-check form-switch mb-0">
+                                                            <input class="form-check-input" type="checkbox" id="noonEnabled">
+                                                            <label class="form-check-label small" for="noonEnabled">Enable slot</label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="time-tile">
+                                                    <div class="tile-header">
+                                                        <div class="tile-icon"><i class="bi bi-brightness-high"></i></div>
+                                                        <div class="tile-label">Afternoon</div>
+                                                        <span class="badge badge-enabled d-none" id="afternoonStatusOn">Enabled</span>
+                                                        <span class="badge badge-disabled d-none" id="afternoonStatusOff">Disabled</span>
+                                                    </div>
+                                                    <div class="tile-body">
+                                                        <div class="input-group input-group-sm mb-2">
+                                                            <span class="input-group-text"><i class="bi bi-clock"></i></span>
+                                                            <input type="time" class="form-control time-input" id="afternoonTime" value="14:00">
+                                                        </div>
+                                                        <div class="form-check form-switch mb-0">
+                                                            <input class="form-check-input" type="checkbox" id="afternoonEnabled">
+                                                            <label class="form-check-label small" for="afternoonEnabled">Enable slot</label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="time-tile">
+                                                    <div class="tile-header">
+                                                        <div class="tile-icon"><i class="bi bi-moon"></i></div>
+                                                        <div class="tile-label">Evening</div>
+                                                        <span class="badge badge-enabled d-none" id="eveningStatusOn">Enabled</span>
+                                                        <span class="badge badge-disabled d-none" id="eveningStatusOff">Disabled</span>
+                                                    </div>
+                                                    <div class="tile-body">
+                                                        <div class="input-group input-group-sm mb-2">
+                                                            <span class="input-group-text"><i class="bi bi-clock"></i></span>
+                                                            <input type="time" class="form-control time-input" id="eveningTime" value="19:00">
+                                                        </div>
+                                                        <div class="form-check form-switch mb-0">
+                                                            <input class="form-check-input" type="checkbox" id="eveningEnabled">
+                                                            <label class="form-check-label small" for="eveningEnabled">Enable slot</label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="mt-3">
+                                                <button type="submit" class="btn btn-success w-100">
+                                                    <i class="bi bi-check-circle"></i> Save Settings
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="card glass">
+                                    <div class="card-header">
+                                        <h5><i class="bi bi-graph-up"></i> Statistics</h5>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div id="statisticsContainer">
+                                            <!-- Statistics will be loaded here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

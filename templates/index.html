@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tủ Thuốc Thông Minh - SmartMed</title>
+
+  <!-- Fonts -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Quicksand:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body data-cabinet-ip="{{ cabinet.ip if cabinet else '' }}">
+
+  <div class="app">
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+      <div class="sidebar-logo">💊</div>
+
+      <button class="nav-item active" onclick="showPage('home', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+        <span>Tủ</span>
+      </button>
+
+      <button class="nav-item" onclick="showPage('history', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+        <span>Lịch sử</span>
+      </button>
+
+      <button class="nav-item" onclick="showPage('settings', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+        <span>Cài đặt</span>
+      </button>
+
+      <button class="nav-item" onclick="showPage('info', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span>Thông tin</span>
+      </button>
+
+      <a href="/observe" class="nav-item" style="text-decoration:none" title="Quan sát thời gian thực">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <path d="M23 7 16 12 23 17V7z"/>
+          <rect x="1" y="5" width="15" height="14" rx="2"/>
+        </svg>
+        <span>Quan sát</span>
+      </a>
+    </nav>
+
+    <!-- MAIN -->
+    <main class="main">
+
+      <!-- HEADER -->
+      <div class="header">
+        <div class="header-title">
+          <h1 id="page-heading">{{ cabinet.name if cabinet else 'Tủ Thuốc Thông Minh' }}</h1>
+          <p id="page-sub-heading">📡 {{ cabinet.ip if cabinet else '' }} — SmartMed</p>
+        </div>
+        <div class="header-actions">
+          <div id="connection-badge" class="badge-status">
+            <div class="dot-pulse"></div>Đang kiểm tra...
+          </div>
+
+          <!-- Cabinet Switcher -->
+          <div class="cab-switcher" id="cab-switcher">
+            <button class="cab-switcher-btn" id="cab-switcher-btn" onclick="toggleSwitcher()">
+              <span class="cab-switcher-icon">🗄️</span>
+              <span class="cab-switcher-name" id="cab-switcher-name">{{ cabinet.name if cabinet else 'Chọn tủ' }}</span>
+              <svg class="cab-switcher-chevron" id="cab-switcher-chevron" width="14" height="14" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            <div class="cab-switcher-dropdown" id="cab-switcher-dropdown">
+              <div class="cab-switcher-header">Chuyển tủ thuốc</div>
+              <div id="cab-switcher-list"><!-- JS filled --></div>
+              <div class="cab-switcher-footer">
+                <a href="/cabinets" class="cab-manage-link">⚙️ Quản lý tủ thuốc</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="btn-notif">🔔<div class="badge">2</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- === HOME PAGE === -->
+      <div id="page-home" class="page active fade-in">
+
+        <!-- Stats -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-value" style="color:#4ECDC4">12</div>
+            <div class="stat-label">🌿 Loại thuốc</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:#27AE60">5/6</div>
+            <div class="stat-label">✅ Đã uống hôm nay</div>
+          </div>
+        </div>
+
+        <div class="cabinet-section">
+
+          <!-- Cabinet 3D -->
+          <div class="cabinet-wrapper">
+            <div class="cabinet-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="2" y="3" width="20" height="18" rx="2" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <line x1="12" y1="3" x2="12" y2="21" />
+              </svg>
+              Hình ảnh tủ thuốc — Nhấn vào ngăn để xem chi tiết
+            </div>
+
+            <div class="cabinet-3d">
+              <div class="cabinet-body">
+                <!-- Top bar with LEDs -->
+                <div class="cabinet-top">
+                  <div class="cabinet-led led-green"></div>
+                  <div class="cabinet-led led-yellow"></div>
+                  <div class="cabinet-led led-blue"></div>
+                  <div class="cabinet-screen-mini">SmartMed v2.4</div>
+                </div>
+
+                <!-- 4 Drawers -->
+                <div class="drawers-grid">
+
+                  <!-- Ngăn 1 -->
+                  <div class="drawer drawer-1" onclick="openDrawer(0)">
+                    <div class="drawer-arrow">›</div>
+                    <div class="drawer-handle"></div>
+                    <div class="drawer-num">Ngăn 01</div>
+                    <div class="drawer-type">Thuốc sáng</div>
+                    <div class="drawer-meta">
+                      <div class="drawer-time">⏰ 07:00 SA</div>
+                      <div class="drawer-count">💊 3 loại thuốc</div>
+                    </div>
+                    <div class="drawer-icon">🌅</div>
+                  </div>
+
+                  <!-- Ngăn 2 -->
+                  <div class="drawer drawer-2" onclick="openDrawer(1)">
+                    <div class="drawer-arrow">›</div>
+                    <div class="drawer-handle"></div>
+                    <div class="drawer-num">Ngăn 02</div>
+                    <div class="drawer-type">Thuốc trưa</div>
+                    <div class="drawer-meta">
+                      <div class="drawer-time">⏰ 12:00 CH</div>
+                      <div class="drawer-count">💊 2 loại thuốc</div>
+                    </div>
+                    <div class="drawer-icon">☀️</div>
+                  </div>
+
+                  <!-- Ngăn 3 -->
+                  <div class="drawer drawer-3" onclick="openDrawer(2)">
+                    <div class="drawer-arrow">›</div>
+                    <div class="drawer-handle"></div>
+                    <div class="drawer-num">Ngăn 03</div>
+                    <div class="drawer-type">Thuốc chiều</div>
+                    <div class="drawer-meta">
+                      <div class="drawer-time">⏰ 17:00 CH</div>
+                      <div class="drawer-count">💊 4 loại thuốc</div>
+                    </div>
+                    <div class="drawer-icon">🌤️</div>
+                  </div>
+
+                  <!-- Ngăn 4 -->
+                  <div class="drawer drawer-4" onclick="openDrawer(3)">
+                    <div class="drawer-arrow">›</div>
+                    <div class="drawer-handle"></div>
+                    <div class="drawer-num">Ngăn 04</div>
+                    <div class="drawer-type">Thuốc tối</div>
+                    <div class="drawer-meta">
+                      <div class="drawer-time">⏰ 21:00 TT</div>
+                      <div class="drawer-count">💊 3 loại thuốc</div>
+                    </div>
+                    <div class="drawer-icon">🌙</div>
+                  </div>
+
+                </div>
+
+                <div class="cabinet-bottom"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Side Panel -->
+          <div class="side-panel">
+            <!-- Real-time Clock -->
+            <div class="info-card">
+              <div class="info-card-title">🕒 Thời gian hiện tại</div>
+              <div class="next-alarm">
+                <div class="clock-display-wrap">
+                  <!-- Clock will go here -->
+                </div>
+                <div class="alarm-med" style="margin-top:10px; border-top:1px solid rgba(0,0,0,0.05); padding-top:10px;">
+                  <span id="next-alarm-day" style="color:var(--primary); font-weight:700">Tiếp theo:</span> 
+                  <span id="next-alarm-time">--:--</span> • 
+                  <span id="next-alarm-name">Chưa có lịch</span>
+                </div>
+                <div class="countdown current-time-mode">
+                  <div class="count-box">
+                    <div class="num" id="clock-hour">00</div>
+                    <div class="lbl">Giờ</div>
+                  </div>
+                  <div class="count-box">
+                    <div class="num" id="clock-min">00</div>
+                    <div class="lbl">Phút</div>
+                  </div>
+                  <div class="count-box">
+                    <div class="num" id="clock-sec">00</div>
+                    <div class="lbl">Giây</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hardware status -->
+            <div class="info-card" id="hw-status-card">
+              <div class="info-card-title">🔌 Trạng thái tủ (ngăn 1)</div>
+              <div id="hw-status-body" class="hw-status-grid">
+                <div class="hw-row"><span>OU1 (mở ngăn)</span><span id="hw-ou1" class="hw-val">—</span></div>
+                <div class="hw-row"><span>RE1 (nhắc)</span><span id="hw-re1" class="hw-val">—</span></div>
+                <div class="hw-row"><span>IN1 (nút)</span><span id="hw-in1" class="hw-val">—</span></div>
+                <div class="hw-row"><span>Phiên uống</span><span id="hw-session" class="hw-val">—</span></div>
+              </div>
+              <button type="button" class="btn-save-schedule btn-reset-ou-home" id="btn-reset-ou" onclick="toggleOuReset()">
+                📂 Mở tất cả ngăn (OU)
+              </button>
+            </div>
+            <!-- Today's Meds -->
+            <div class="info-card">
+              <div class="info-card-title">📋 Lịch uống hôm nay</div>
+              <div id="today-meds-list">
+                <!-- JS filled -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- === HISTORY PAGE === -->
+      <div id="page-history" class="page fade-in">
+        <div class="page-title">Lịch sử uống thuốc</div>
+        <div class="page-sub">Theo dõi toàn bộ lịch sử các lần uống thuốc</div>
+
+        <div class="history-list" id="history-list-dynamic">
+          <!-- JS filled -->
+        </div>
+      </div>
+
+      <!-- === SETTINGS PAGE === -->
+      <div id="page-settings" class="page fade-in">
+        <div class="page-title">Cài đặt tủ thuốc</div>
+        <div class="page-sub">Quản lý lịch uống, danh sách thuốc và thông báo</div>
+
+        <!-- Settings Tab Bar -->
+        <div class="stab-bar">
+          <button class="stab active" onclick="switchSettingsTab('schedule', this)">⏰ Lịch uống thuốc</button>
+          <button class="stab" onclick="switchSettingsTab('medicines', this)">💊 Danh sách thuốc</button>
+          <button class="stab" onclick="switchSettingsTab('notify', this)">🔔 Thông báo</button>
+          <button class="stab" onclick="switchSettingsTab('connect', this)">🔌 Kết nối</button>
+        </div>
+
+        <!-- TAB: SCHEDULE -->
+        <div id="stab-schedule" class="stab-content active">
+          <div id="drawer-schedule-list"></div>
+        </div>
+
+        <!-- TAB: MEDICINES -->
+        <div id="stab-medicines" class="stab-content">
+          <!-- Drawer selector tabs -->
+          <div class="drawer-tabs">
+            <button class="dtab active" onclick="switchDrawerTab(0, this)">
+              <span class="dtab-dot" style="background:#FF6B6B"></span>Ngăn 01
+            </button>
+            <button class="dtab" onclick="switchDrawerTab(1, this)">
+              <span class="dtab-dot" style="background:#4ECDC4"></span>Ngăn 02
+            </button>
+            <button class="dtab" onclick="switchDrawerTab(2, this)">
+              <span class="dtab-dot" style="background:#E6C200"></span>Ngăn 03
+            </button>
+            <button class="dtab" onclick="switchDrawerTab(3, this)">
+              <span class="dtab-dot" style="background:#5DB884"></span>Ngăn 04
+            </button>
+          </div>
+          <div id="med-list-container"></div>
+        </div>
+
+        <!-- TAB: NOTIFY -->
+        <div id="stab-notify" class="stab-content">
+          <div class="settings-section">
+            <div class="settings-title">🔔 Thông báo & Cảnh báo</div>
+            <div class="settings-card">
+              <div class="setting-row">
+                <div class="setting-icon" style="background:#E8F4FF">🔔</div>
+                <div class="setting-label">
+                  <div class="setting-name">Nhắc nhở uống thuốc</div>
+                  <div class="setting-desc">Gửi thông báo trước 5 phút</div>
+                </div>
+                <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-icon" style="background:#FFF5E6">⚠️</div>
+                <div class="setting-label">
+                  <div class="setting-name">Cảnh báo sắp hết thuốc</div>
+                  <div class="setting-desc">Nhắc khi còn ≤ 5 viên</div>
+                </div>
+                <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-icon" style="background:#F0FFF4">📱</div>
+                <div class="setting-label">
+                  <div class="setting-name">Thông báo điện thoại</div>
+                  <div class="setting-desc">Kết nối ứng dụng điện thoại</div>
+                </div>
+                <div class="toggle" onclick="this.classList.toggle('on')"></div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-icon" style="background:#FFF0FE">🔊</div>
+                <div class="setting-label">
+                  <div class="setting-name">Âm thanh nhắc nhở</div>
+                  <div class="setting-desc">Bật âm thanh khi đến giờ</div>
+                </div>
+                <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: CONNECT -->
+        <div id="stab-connect" class="stab-content">
+          <div class="settings-section">
+            <div class="settings-title">🔌 Kết nối & Đồng bộ</div>
+            <div class="settings-card">
+              <div class="setting-row">
+                <div class="setting-icon" style="background:#E8F8FF">📡</div>
+                <div class="setting-label">
+                  <div class="setting-name">Kết nối Wi-Fi</div>
+                  <div class="setting-desc">SmartHome_5G • Đã kết nối</div>
+                </div>
+                <span style="font-size:12px;color:#27AE60;font-weight:700">● Online</span>
+              </div>
+              <div class="setting-row">
+                <div class="setting-icon" style="background:#FFF5F5">🏥</div>
+                <div class="setting-label">
+                  <div class="setting-name">Đồng bộ hồ sơ bệnh án</div>
+                  <div class="setting-desc">Kết nối API bệnh viện</div>
+                </div>
+                <div class="toggle" onclick="this.classList.toggle('on')"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- === INFO PAGE === -->
+      <div id="page-info" class="page fade-in">
+        <div class="page-title">Thông tin thiết bị</div>
+        <div class="page-sub">Chi tiết cấu hình và tình trạng hệ thống SmartMed</div>
+
+        <div class="info-hero-modern">
+          <div class="info-hero-icon">🤖</div>
+          <div class="info-hero-text">
+            <div class="info-hero-name" id="info-cab-name">Đang tải...</div>
+            <div class="info-hero-model" id="info-cab-id">ID: --</div>
+            <div class="info-hero-status">
+              <span class="status-pill pulse-green" id="info-cab-status">● Đang hoạt động</span>
+              <span class="status-pill" id="info-cab-ip">📡 IP: --</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-grid-modern">
+          <div class="info-card-modern">
+            <div class="info-card-icon">📦</div>
+            <div class="info-card-label">Phiên bản</div>
+            <div class="info-card-value">v2.4.1-Stable</div>
+          </div>
+          <div class="info-card-modern">
+            <div class="info-card-icon">📅</div>
+            <div class="info-card-label">Loại thiết bị</div>
+            <div class="info-card-value">ESP32 + ESP32-CAM</div>
+          </div>
+          <div class="info-card-modern">
+            <div class="info-card-icon">⚡</div>
+            <div class="info-card-label">Điện áp</div>
+            <div class="info-card-value">5.0V / 2A</div>
+          </div>
+          <div class="info-card-modern">
+            <div class="info-card-icon">🏥</div>
+            <div class="info-card-label">Dữ liệu</div>
+            <div class="info-card-value">SQLite Local</div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- MEDICINE ADD/EDIT FORM MODAL -->
+  <div class="med-form-overlay" id="med-form-overlay" onclick="closeMedForm(event)">
+    <div class="med-form">
+      <div class="med-form-header">
+        <div class="med-form-title" id="med-form-title">➕ Thêm thuốc mới</div>
+        <button class="modal-close"
+          onclick="document.getElementById('med-form-overlay').classList.remove('open')">✕</button>
+      </div>
+      <div class="med-form-body">
+        <input type="hidden" id="edit-med-idx" value="-1">
+        <input type="hidden" id="edit-drawer-idx" value="0">
+
+        <div class="form-row">
+          <div class="form-group full">
+            <div class="form-label">Tên thuốc *</div>
+            <input class="form-input" id="f-name" placeholder="VD: Vitamin C 500mg">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <div class="form-label">Hàm lượng / Liều dùng *</div>
+            <input class="form-input" id="f-dose" placeholder="VD: 1 viên sau ăn">
+          </div>
+          <div class="form-group">
+            <div class="form-label">Giờ uống của ngăn</div>
+            <input type="time" class="form-input form-input-disabled" id="f-time" value="07:00" disabled readonly>
+            <div class="form-time-hint" id="f-time-hint">⏰ Theo lịch ngăn</div>
+          </div>
+        </div>
+
+
+        <div class="form-row">
+          <div class="form-group full">
+            <div class="form-label">Ngăn chứa</div>
+            <select class="form-select" id="f-drawer"
+              onchange="document.getElementById('edit-drawer-idx').value=this.value; updateMedFormTime()">
+              <option value="0">Ngăn 01 — Buổi sáng</option>
+              <option value="1">Ngăn 02 — Buổi trưa</option>
+              <option value="2">Ngăn 03 — Buổi chiều</option>
+              <option value="3">Ngăn 04 — Buổi tối</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group full">
+            <div class="form-label">Ghi chú</div>
+            <textarea class="form-textarea" id="f-note"
+              placeholder="VD: Uống kèm nhiều nước, tránh dùng với sữa..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="form-footer">
+        <button class="btn-cancel"
+          onclick="document.getElementById('med-form-overlay').classList.remove('open')">Hủy</button>
+        <button class="btn-submit" onclick="saveMedicine()">💾 Lưu thuốc</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+  <div class="modal-overlay" id="modal" onclick="closeDrawer(event)">
+    <div class="modal" id="modal-content">
+      <div class="modal-header" id="modal-header">
+        <div class="modal-icon" id="modal-icon"></div>
+        <div>
+          <div class="modal-title" id="modal-title"></div>
+          <div class="modal-sub" id="modal-sub"></div>
+        </div>
+        <button class="modal-close" onclick="document.getElementById('modal').classList.remove('open')">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script>
+    // ── Cabinet Switcher ──────────────────────────────────
+    let switcherOpen = false;
+
+    async function loadSwitcherList() {
+      try {
+        const res = await fetch('/api/cabinets/list');
+        const data = await res.json();
+        const list = document.getElementById('cab-switcher-list');
+        if (!list) return;
+        list.innerHTML = '';
+        data.cabinets.forEach(cab => {
+          const isActive = cab.id === data.active_id;
+          const item = document.createElement('button');
+          item.className = 'cab-switch-item' + (isActive ? ' cab-switch-active' : '');
+          item.innerHTML = `
+        <span class="cab-switch-dot"></span>
+        <span class="cab-switch-info">
+          <span class="cab-switch-name">${cab.name}</span>
+          <span class="cab-switch-ip">${cab.ip}</span>
+        </span>
+        ${isActive ? '<span class="cab-switch-check">✓</span>' : ''}
+      `;
+          if (!isActive) {
+            item.onclick = () => switchCabinet(cab.id, cab.name);
+          }
+          list.appendChild(item);
+        });
+      } catch (e) { }
+    }
+
+    async function switchCabinet(id, name) {
+      closeSwitcher();
+      const res = await fetch(`/api/cabinets/select/${id}`, { method: 'POST' });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        window.location.reload();
+      }
+    }
+
+    function toggleSwitcher() {
+      switcherOpen = !switcherOpen;
+      document.getElementById('cab-switcher-dropdown').classList.toggle('open', switcherOpen);
+      document.getElementById('cab-switcher-chevron').style.transform = switcherOpen ? 'rotate(180deg)' : '';
+      if (switcherOpen) loadSwitcherList();
+    }
+
+    function closeSwitcher() {
+      switcherOpen = false;
+      const dd = document.getElementById('cab-switcher-dropdown');
+      if (dd) dd.classList.remove('open');
+      const ch = document.getElementById('cab-switcher-chevron');
+      if (ch) ch.style.transform = '';
+    }
+
+    document.addEventListener('click', e => {
+      const sw = document.getElementById('cab-switcher');
+      if (sw && !sw.contains(e.target)) closeSwitcher();
+    });
+  </script>
+
+</body>
+
+</html>
