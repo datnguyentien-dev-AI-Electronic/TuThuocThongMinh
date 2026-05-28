@@ -1,6 +1,6 @@
 # Tủ Thuốc Thông Minh
 
-Tủ Thuốc Thông Minh là hệ thống hỗ trợ quản lý lịch uống thuốc, điều khiển ngăn thuốc và theo dõi quá trình uống thuốc bằng camera. Dự án kết hợp web server Flask, cơ sở dữ liệu SQLite, ESP32/ESP8266, ESP32-CAM và mô hình nhận diện cử chỉ bằng OpenCV + MediaPipe.
+Tủ Thuốc Thông Minh là hệ thống hỗ trợ quản lý lịch uống thuốc, điều khiển ngăn thuốc và theo dõi quá trình uống thuốc bằng camera. Dự án kết hợp web server Flask, cơ sở dữ liệu SQLite, ESP32, ESP32-CAM và mô hình nhận diện cử chỉ bằng OpenCV + MediaPipe.
 
 ## Chức Năng Chính
 
