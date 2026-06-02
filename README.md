@@ -10,8 +10,6 @@ Dự án là sự kết hợp hoàn chỉnh giữa **Web Server Flask** (Cơ s�
 
 - **Quản lý đa tủ thuốc (Multi-Cabinet):** Quản lý đồng thời nhiều tủ thuốc thông qua tên và địa chỉ IP tĩnh/động trong mạng LAN.
 - **Phân chia 4 ngăn thông minh (4-Drawer Session Management):** Hỗ trợ đầy đủ 4 ngăn thuốc tương ứng với lịch uống (Sáng, Trưa, Chiều, Tối). Mỗi ngăn hoạt động độc lập và song song.
-- **Bảo vệ màn hình LCD diện rộng:** Tự động khóa luồng hiển thị cảm biến nhiệt độ/độ ẩm DHT11 khi có ngăn tủ đang hoạt động, ngăn chặn tình trạng ghi đè chữ hoặc nhấp nháy màn hình.
-- **Xử lý nút bấm thông minh chống nhiễu (Active-Low Software Pulse):** Áp dụng thuật toán chuyển đổi trạng thái logic và phát hiện **trọn vẹn 1 xung bấm vật lý** (`Thả -> Nhấn -> Thả`), loại bỏ hiện tượng báo động giả khi vừa khởi động thiết bị có trở kéo lên (Pull-up).
 - **Trình nhận diện hành vi bằng AI (Camera Real-time Stream):** Tích hợp luồng camera từ ESP32-CAM truyền trực tiếp về Web Server Flask, xử lý thời gian thực qua MediaPipe để phát hiện chính xác 2 bước uống thuốc (Đưa thuốc lên miệng và đưa cốc nước lên uống) rồi tự động tắt đèn nhắc nhở và lưu lịch sử.
 - **Hệ thống cảnh báo cảm biến:** Hiển thị cảnh báo trực quan trên màn hình LCD khi nhiệt độ > 37.5°C hoặc độ ẩm > 80% để bảo quản thuốc tốt nhất.
 
