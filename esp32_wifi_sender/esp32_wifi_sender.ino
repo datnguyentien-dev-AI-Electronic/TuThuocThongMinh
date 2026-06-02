@@ -58,8 +58,8 @@ DrawerState drawers[4] = {{false, false, false, false, false, 0, 0, 0},
                           {false, false, false, false, false, 0, 0, 0},
                           {false, false, false, false, false, 0, 0, 0}};
 
-// Nut IN: xung day du normal (HIGH do tro keo len) -> pressed (LOW) -> normal
-// (HIGH) readIn() = false (normal), readIn() = true (pressed)
+// Công tắc IN: Trạng thái đóng ngăn = LOW (BTN_NORMAL), Trạng thái mở ngăn = HIGH (BTN_ACTIVE)
+// Chu kỳ hoàn chỉnh: Đóng ngăn (0) -> Mở ngăn (1) -> Đóng ngăn lại (0)
 enum BtnPhase { BTN_NORMAL, BTN_ACTIVE };
 BtnPhase btnPhases[4] = {BTN_NORMAL, BTN_NORMAL, BTN_NORMAL, BTN_NORMAL};
 
@@ -93,9 +93,11 @@ void lcdUpdateTemp() {
 bool readIn(int idx) {
   if (idx < 0 || idx > 3)
     return false;
-  // Cac chan IN1..IN4 deu co tro keo len: Binh thuong read HIGH, Bam nut read
-  // LOW. readIn() tra ve true khi nut duoc BAM (LOW), va false khi ranh (HIGH).
-  return digitalRead(IN_PINS[idx]) == LOW;
+  // Các chân IN1..IN4 kết nối với công tắc hành trình ngăn tủ.
+  // Khi ngăn ĐÓNG: công tắc đóng xuống GND -> đọc được mức THẤP (LOW / 0).
+  // Khi ngăn MỞ: công tắc nhả ra -> được kéo lên mức CAO (HIGH / 1) bằng trở kéo.
+  // Trả về true nếu ngăn đang MỞ (HIGH), và false nếu ngăn đang ĐÓNG (LOW).
+  return digitalRead(IN_PINS[idx]) == HIGH;
 }
 
 void setOu(int idx, bool on) {
@@ -200,8 +202,8 @@ void startDrawerSession(int idx) {
 
   Serial.printf("[DRAWER %d] Bat dau phien — OU%d ON (30 phut)\n", idx + 1,
                 idx + 1);
-  lcdPrint2Rows("Ngan " + String(idx + 1) + ": MO     ",
-                "Cho nut IN" + String(idx + 1) + "... ");
+  lcdPrint2Rows("Ngan " + String(idx + 1) + ": MO KHOA",
+                "Hay mo ngan...  ");
 }
 
 void endDrawerSession(int idx) {
@@ -227,18 +229,19 @@ void pollButton(int idx) {
   if (!drawers[idx].sessionActive || drawers[idx].buttonPressed)
     return;
 
-  bool pressed = readIn(idx);
+  bool open = readIn(idx);
 
-  if (btnPhases[idx] == BTN_NORMAL && pressed) {
+  if (btnPhases[idx] == BTN_NORMAL && open) {
     btnPhases[idx] = BTN_ACTIVE;
-    Serial.printf("[BUTTON] IN%d: LOW -> HIGH (Pressed)\n", idx + 1);
-  } else if (btnPhases[idx] == BTN_ACTIVE && !pressed) {
+    Serial.printf("[DRAWER] IN%d: LOW -> HIGH (Drawer Opened)\n", idx + 1);
+    lcdPrint2Rows("Ngan " + String(idx + 1) + ": DA MO   ", "Hay lay thuoc!  ");
+  } else if (btnPhases[idx] == BTN_ACTIVE && !open) {
     drawers[idx].buttonPressed = true;
     drawers[idx].buttonCompleteMs = millis();
     btnPhases[idx] = BTN_NORMAL;
-    Serial.printf("[BUTTON] IN%d: HIGH -> LOW (Released) — Trọn vẹn 1 xung!\n",
+    Serial.printf("[DRAWER] IN%d: HIGH -> LOW (Drawer Closed) — Hoan thanh chu ky mo-dong!\n",
                   idx + 1);
-    lcdPrint2Rows("Da bam nut!    ", "Cho 30 giay... ");
+    lcdPrint2Rows("Da dong ngan " + String(idx + 1), "Cho 30 giay...  ");
   }
 }
 

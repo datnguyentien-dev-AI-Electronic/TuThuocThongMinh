@@ -11,7 +11,7 @@ Dự án là sự kết hợp hoàn chỉnh giữa **Web Server Flask** (Cơ s�
 - **Quản lý đa tủ thuốc (Multi-Cabinet):** Quản lý đồng thời nhiều tủ thuốc thông qua tên và địa chỉ IP tĩnh/động trong mạng LAN.
 - **Phân chia 4 ngăn thông minh (4-Drawer Session Management):** Hỗ trợ đầy đủ 4 ngăn thuốc tương ứng với lịch uống (Sáng, Trưa, Chiều, Tối). Mỗi ngăn hoạt động độc lập và song song.
 - **Bảo vệ màn hình LCD diện rộng:** Tự động khóa luồng hiển thị cảm biến nhiệt độ/độ ẩm DHT11 khi có ngăn tủ đang hoạt động, ngăn chặn tình trạng ghi đè chữ hoặc nhấp nháy màn hình.
-- **Xử lý nút bấm thông minh chống nhiễu (Active-Low Software Pulse):** Áp dụng thuật toán chuyển đổi trạng thái logic và phát hiện **trọn vẹn 1 xung bấm vật lý** (`Thả -> Nhấn -> Thả`), loại bỏ hiện tượng báo động giả khi vừa khởi động thiết bị có trở kéo lên (Pull-up).
+- **Cảm biến hành trình ngăn tủ thông minh (Drawer Limit Switch State Machine):** Áp dụng cơ chế theo dõi chu kỳ mở-đóng ngăn tủ trọn vẹn: Khi ngăn đóng (Switch đóng xuống GND -> đọc được mức thấp `0`), khi mở ra công tắc nhả ra và được kéo lên mức cao (`1`). ESP32 tự động nhận biết hành vi mở và đóng lại để kích hoạt quy trình chờ AI xác thực uống thuốc.
 - **Trình nhận diện hành vi bằng AI (Camera Real-time Stream):** Tích hợp luồng camera từ ESP32-CAM truyền trực tiếp về Web Server Flask, xử lý thời gian thực qua MediaPipe để phát hiện chính xác 2 bước uống thuốc (Đưa thuốc lên miệng và đưa cốc nước lên uống) rồi tự động tắt đèn nhắc nhở và lưu lịch sử.
 - **Hệ thống cảnh báo cảm biến:** Hiển thị cảnh báo trực quan trên màn hình LCD khi nhiệt độ > 37.5°C hoặc độ ẩm > 80% để bảo quản thuốc tốt nhất.
 
@@ -25,10 +25,10 @@ Thiết bị sử dụng vi điều khiển chính **ESP32 DevKit V1** kết h�
 
 | Tên chân (Logic) | Chân GPIO (ESP32) | Loại Chân | Chức năng | Trạng thái vật lý |
 | :--- | :---: | :---: | :--- | :--- |
-| **IN1** | `36` (VP) | Input | Nút bấm phản hồi Ngăn 1 | Có trở kéo lên ngoại (Mặc định `HIGH`, bấm `LOW`) |
-| **IN2** | `39` (VN) | Input | Nút bấm phản hồi Ngăn 2 | Có trở kéo lên ngoại (Mặc định `HIGH`, bấm `LOW`) |
-| **IN3** | `34` | Input | Nút bấm phản hồi Ngăn 3 | Có trở kéo lên ngoại (Mặc định `HIGH`, bấm `LOW`) |
-| **IN4** | `35` | Input | Nút bấm phản hồi Ngăn 4 | Có trở kéo lên ngoại (Mặc định `HIGH`, bấm `LOW`) |
+| **IN1** | `36` (VP) | Input | Cảm biến hành trình Ngăn 1 | Mặc định khi đóng ngăn = `LOW` (0), khi mở ngăn = `HIGH` (1) |
+| **IN2** | `39` (VN) | Input | Cảm biến hành trình Ngăn 2 | Mặc định khi đóng ngăn = `LOW` (0), khi mở ngăn = `HIGH` (1) |
+| **IN3** | `34` | Input | Cảm biến hành trình Ngăn 3 | Mặc định khi đóng ngăn = `LOW` (0), khi mở ngăn = `HIGH` (1) |
+| **IN4** | `35` | Input | Cảm biến hành trình Ngăn 4 | Mặc định khi đóng ngăn = `LOW` (0), khi mở ngăn = `HIGH` (1) |
 | **OU1** | `23` | Output | Kích mở khóa chốt Ngăn 1 | Mức cao (`HIGH`) = Mở ngăn, mức thấp (`LOW`) = Khóa |
 | **OU2** | `19` | Output | Kích mở khóa chốt Ngăn 2 | Mức cao (`HIGH`) = Mở ngăn, mức thấp (`LOW`) = Khóa |
 | **OU3** | `18` | Output | Kích mở khóa chốt Ngăn 3 | Mức cao (`HIGH`) = Mở ngăn, mức thấp (`LOW`) = Khóa |
@@ -105,8 +105,8 @@ Các yêu cầu HTTP được truyền nhận trực tiếp thông qua địa ch
 
 ### 2. APIs ESP32 báo cáo ngược về Flask
 * **`POST /api/drawer/missed`**: Báo cáo sự kiện khi đến giờ hẹn:
-  * **missed**: Quá 30 phút mà người dùng không nhấn nút mở tủ (ESP32 sẽ bật cả còi, chốt khóa và đèn để gây chú ý).
-  * **not_detect**: Người dùng đã bấm nút lấy thuốc nhưng quá 10 phút trôi qua mà camera AI không xác thực được hành động uống thuốc thành công.
+  * **missed**: Quá 30 phút mà người dùng không mở ngăn tủ lấy thuốc (ESP32 sẽ bật cả còi, chốt khóa và đèn để gây chú ý).
+  * **not_detect**: Người dùng đã mở/đóng tủ lấy thuốc nhưng quá 10 phút trôi qua mà camera AI không xác thực được hành động uống thuốc thành công.
 
 ---
 
@@ -115,7 +115,7 @@ Các yêu cầu HTTP được truyền nhận trực tiếp thông qua địa ch
 - **Trạng thái rảnh (Idle):** Hệ thống hiển thị IP của ESP32 và cảm biến DHT11 lên LCD 16x2. Chờ lệnh từ Flask Server.
 - **Bắt đầu phiên (Drawer Active):** Khi có lệnh hẹn giờ gửi từ Web, còi kêu 150ms, mở khóa `OU` tương ứng trong 30 phút.
 - **Nếu quá 30 phút không nhấn nút (Missed):** Mạch tự động bật cả khóa chốt `OU` và đèn `RE` nhấp nháy liên tục để cảnh báo người dùng, đồng thời gọi Flask API báo cáo `missed`.
-- **Nếu nhấn nút (Xung logic LOW -> HIGH -> LOW):** Sau 30 giây, đóng khóa chốt `OU` lại để đảm bảo an toàn, đồng thời bật đèn nhắc nhở `RE` và bắt đầu đếm ngược 10 phút chờ camera AI quét cử chỉ.
+- **Nếu mở và đóng ngăn tủ lại (Chu kỳ LOW -> HIGH -> LOW):** Khi người dùng mở ngăn tủ (mức `HIGH`) rồi đóng lại (mức `LOW`), ESP32 sẽ ghi nhận chu kỳ hoàn tất. Sau 30 giây kể từ khi đóng tủ, khóa chốt `OU` sẽ đóng lại để bảo vệ, đồng thời đèn nhắc nhở `RE` bật sáng và bắt đầu đếm ngược 10 phút chờ camera AI quét cử chỉ uống thuốc.
 - **Trí tuệ nhân tạo xác nhận thành công (Completed):** OpenCV + MediaPipe quét thấy cử chỉ uống thuốc thành công, Web gửi tín hiệu tắt đèn `RE`, kết thúc phiên hoạt động và lưu lịch sử.
 - **Quá 10 phút không thấy cử chỉ (Not Detect):** Đèn `RE` giữ nguyên trạng thái sáng nhắc nhở, đồng thời gọi Flask API báo cáo `not_detect`.
 
