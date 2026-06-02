@@ -165,4 +165,4 @@ Sau đó, truy cập trình duyệt tại địa chỉ mặc định: [http://lo
   * **Đã sửa đổi:** Cú pháp đã được sửa thành `data.startsWith("IP:")` và tích hợp bộ cắt khoảng trắng `.trim()` giúp lọc chính xác tuyệt đối địa chỉ IP camera truyền qua cổng Serial UART.
 
 ---
-💡 *Dự án được xây dựng và tối ưu hóa tỉ mỉ bởi đội ngũ SmartMed Việt Nam. Mọi thắc mắc và đóng góp ý kiến vui lòng gửi yêu cầu hỗ trợ qua cổng quản lý mã nguồn.*
+💡 *Dự án được xây dựng và tối ưu hóa bởi sinh viên Nguyễn Tiến Đạt. Mọi thắc mắc và đóng góp ý kiến vui lòng gửi yêu cầu hỗ trợ qua số điện thoại: 0974363010.*
