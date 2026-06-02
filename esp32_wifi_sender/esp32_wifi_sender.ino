@@ -1,29 +1,29 @@
 
+#include <DHT.h>
+#include <HTTPClient.h>
+#include <LiquidCrystal_I2C.h>
+#include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiManager.h>
-#include <WebServer.h>
-#include <HTTPClient.h>
 #include <Wire.h>
-#include <LiquidCrystal_I2C.h>
-#include <DHT.h>
 
-#define RX2_PIN       16
-#define TX2_PIN       17
+#define RX2_PIN 16
+#define TX2_PIN 17
 #define RESET_CAM_PIN 13
-#define DHTPIN        32
+#define DHTPIN 32
 #define DHTTYPE DHT11
 
 // GPIO — dau vao (co tro keo len ngoai)
-const int IN_PINS[4]  = {36, 39, 34, 35};  // VP, VN, 34, 35 -> IN1..IN4
+const int IN_PINS[4] = {36, 39, 34, 35}; // VP, VN, 34, 35 -> IN1..IN4
 // GPIO — dau ra mo ngan
-const int OU_PINS[4]  = {23, 19, 18, 4};   // OU1..OU4
+const int OU_PINS[4] = {23, 19, 18, 4}; // OU1..OU4
 // GPIO — den nhac (reminder)
-const int RE_PINS[4]  = {25, 26, 27, 14};  // RE1..RE4
-const int BUZZER_PIN  = 33;
+const int RE_PINS[4] = {25, 26, 27, 14}; // RE1..RE4
+const int BUZZER_PIN = 33;
 
-#define OU_SESSION_MS    (30UL * 60UL * 1000UL)  // 30 phut — khong bam nut
-#define AFTER_BTN_MS     (30UL * 1000UL)         // 30 giay sau nut -> tat OU, bat RE
-#define AI_WAIT_MS       (10UL * 60UL * 1000UL)  // 10 phut cho AI sau khi bam nut
+#define OU_SESSION_MS (30UL * 60UL * 1000UL) // 30 phut — khong bam nut
+#define AFTER_BTN_MS (30UL * 1000UL)      // 30 giay sau nut -> tat OU, bat RE
+#define AI_WAIT_MS (10UL * 60UL * 1000UL) // 10 phut cho AI sau khi bam nut
 
 DHT dht(DHTPIN, DHTTYPE);
 HardwareSerial camSerial(2);
@@ -41,32 +41,40 @@ String tempStr = "--.-C";
 
 WebServer server(80);
 
-// ===== Trang thai ngan 1 (IN1, OU1, RE1) =====
-struct Drawer1State {
+// ===== Trang thai 4 ngan (IN1-IN4, OU1-OU4, RE1-RE4) =====
+struct DrawerState {
   bool sessionActive;
   bool buttonPressed;
-  bool missedReported;      // het 30p khong bam nut (OU+RE)
-  bool notDetectReported;   // da bam nut nhung het 10p khong co AI (chi RE)
+  bool missedReported;    // het 30p khong bam nut (OU+RE)
+  bool notDetectReported; // da bam nut nhung het 10p khong co AI (chi RE)
   bool reOn;
   unsigned long ouStartMs;
   unsigned long buttonCompleteMs;
   unsigned long waitingAiSinceMs;
-} drawer1 = {false, false, false, false, false, 0, 0, 0};
+};
 
-// Nut IN1: xung day du HIGH -> LOW -> HIGH (tro keo len ngoai)
-enum BtnPhase { BTN_HIGH, BTN_LOW };
-BtnPhase in1Phase = BTN_HIGH;
+DrawerState drawers[4] = {{false, false, false, false, false, 0, 0, 0},
+                          {false, false, false, false, false, 0, 0, 0},
+                          {false, false, false, false, false, 0, 0, 0},
+                          {false, false, false, false, false, 0, 0, 0}};
+
+// Nut IN: xung day du normal (HIGH do tro keo len) -> pressed (LOW) -> normal
+// (HIGH) readIn() = false (normal), readIn() = true (pressed)
+enum BtnPhase { BTN_NORMAL, BTN_ACTIVE };
+BtnPhase btnPhases[4] = {BTN_NORMAL, BTN_NORMAL, BTN_NORMAL, BTN_NORMAL};
 
 // Reset OU thu cong: bat tat ca OU -> bam lai tat het va ve trang thai ban dau
 bool ouManualAllOn = false;
 
 // ============================================================
-//  HAM TIEN ICH
+//  HAM TIEN ICH & LOGIC
 // ============================================================
 
 void lcdPrintRow(int row, String text) {
-  while (text.length() < 16) text += " ";
-  if (text.length() > 16) text = text.substring(0, 16);
+  while (text.length() < 16)
+    text += " ";
+  if (text.length() > 16)
+    text = text.substring(0, 16);
   lcd.setCursor(0, row);
   lcd.print(text);
 }
@@ -77,17 +85,30 @@ void lcdPrint2Rows(String row0, String row1) {
 }
 
 void lcdUpdateTemp() {
-  String line = "T:" + String(temperature, 1) + "C H:" + String(humidity, 0) + "%";
+  String line =
+      "T:" + String(temperature, 1) + "C H:" + String(humidity, 0) + "%";
   lcdPrintRow(1, line);
 }
 
-bool readIn1() {
-  return digitalRead(IN_PINS[0]) == HIGH;
+bool readIn(int idx) {
+  if (idx < 0 || idx > 3)
+    return false;
+  // Cac chan IN1..IN4 deu co tro keo len: Binh thuong read HIGH, Bam nut read
+  // LOW. readIn() tra ve true khi nut duoc BAM (LOW), va false khi ranh (HIGH).
+  return digitalRead(IN_PINS[idx]) == LOW;
 }
 
-void setOu1(bool on) {
-  if (ouManualAllOn) return;
-  digitalWrite(OU_PINS[0], on ? HIGH : LOW);
+void setOu(int idx, bool on) {
+  if (idx < 0 || idx > 3 || ouManualAllOn)
+    return;
+  digitalWrite(OU_PINS[idx], on ? HIGH : LOW);
+}
+
+void setRe(int idx, bool on) {
+  if (idx < 0 || idx > 3)
+    return;
+  digitalWrite(RE_PINS[idx], on ? HIGH : LOW);
+  drawers[idx].reOn = on;
 }
 
 void setAllOu(bool on) {
@@ -99,21 +120,23 @@ void setAllOu(bool on) {
 void setAllRe(bool on) {
   for (int i = 0; i < 4; i++) {
     digitalWrite(RE_PINS[i], on ? HIGH : LOW);
+    drawers[i].reOn = on;
   }
-  drawer1.reOn = on && (digitalRead(RE_PINS[0]) == HIGH);
 }
 
 void resetCabinetToIdle() {
   ouManualAllOn = false;
-  drawer1.sessionActive = false;
-  drawer1.buttonPressed = false;
-  drawer1.missedReported = false;
-  drawer1.notDetectReported = false;
-  drawer1.reOn = false;
-  drawer1.ouStartMs = 0;
-  drawer1.buttonCompleteMs = 0;
-  drawer1.waitingAiSinceMs = 0;
-  in1Phase = readIn1() ? BTN_HIGH : BTN_LOW;
+  for (int i = 0; i < 4; i++) {
+    drawers[i].sessionActive = false;
+    drawers[i].buttonPressed = false;
+    drawers[i].missedReported = false;
+    drawers[i].notDetectReported = false;
+    drawers[i].reOn = false;
+    drawers[i].ouStartMs = 0;
+    drawers[i].buttonCompleteMs = 0;
+    drawers[i].waitingAiSinceMs = 0;
+    btnPhases[i] = readIn(i) ? BTN_ACTIVE : BTN_NORMAL;
+  }
   setAllOu(false);
   setAllRe(false);
   digitalWrite(BUZZER_PIN, LOW);
@@ -133,134 +156,155 @@ void toggleOuReset() {
   }
 }
 
-void setRe1(bool on) {
-  digitalWrite(RE_PINS[0], on ? HIGH : LOW);
-  drawer1.reOn = on;
-}
-
-void reportEventToFlask(const char* eventStatus) {
+void reportEventToFlask(int idx, const char *eventStatus) {
   if (flaskCallbackUrl.length() == 0) {
-    Serial.printf("[DRAWER1] Khong co callback URL — bo qua bao %s\n", eventStatus);
+    Serial.printf("[DRAWER %d] Khong co callback URL — bo qua bao %s\n",
+                  idx + 1, eventStatus);
     return;
   }
   HTTPClient http;
   String url = flaskCallbackUrl;
-  if (!url.endsWith("/")) url += "/";
+  if (!url.endsWith("/"))
+    url += "/";
   url += "api/drawer/missed";
 
-  String payload = "{\"drawer\":0,\"cabinet_ip\":\"" + WiFi.localIP().toString()
-    + "\",\"status\":\"" + eventStatus + "\"}";
+  String payload = "{\"drawer\":" + String(idx) + ",\"cabinet_ip\":\"" +
+                   WiFi.localIP().toString() + "\",\"status\":\"" +
+                   eventStatus + "\"}";
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
   int code = http.POST(payload);
-  Serial.printf("[DRAWER1] POST %s -> %d\n", eventStatus, code);
+  Serial.printf("[DRAWER %d] POST %s -> %d\n", idx + 1, eventStatus, code);
   http.end();
 }
 
-void startDrawer1Session() {
-  drawer1.sessionActive = true;
-  drawer1.buttonPressed = false;
-  drawer1.missedReported = false;
-  drawer1.notDetectReported = false;
-  drawer1.reOn = false;
-  drawer1.ouStartMs = millis();
-  drawer1.buttonCompleteMs = 0;
-  drawer1.waitingAiSinceMs = 0;
-  in1Phase = readIn1() ? BTN_HIGH : BTN_LOW;
+void startDrawerSession(int idx) {
+  if (idx < 0 || idx > 3)
+    return;
+  drawers[idx].sessionActive = true;
+  drawers[idx].buttonPressed = false;
+  drawers[idx].missedReported = false;
+  drawers[idx].notDetectReported = false;
+  drawers[idx].reOn = false;
+  drawers[idx].ouStartMs = millis();
+  drawers[idx].buttonCompleteMs = 0;
+  drawers[idx].waitingAiSinceMs = 0;
+  btnPhases[idx] = readIn(idx) ? BTN_ACTIVE : BTN_NORMAL;
 
-  setOu1(true);
-  setRe1(false);
+  digitalWrite(OU_PINS[idx], HIGH);
+  setRe(idx, false);
+
   digitalWrite(BUZZER_PIN, HIGH);
   delay(150);
   digitalWrite(BUZZER_PIN, LOW);
 
-  Serial.println("[DRAWER1] Bat dau phien — OU1 ON (30 phut)");
-  lcdPrint2Rows("Ngan 1: MO     ", "Cho nut IN1... ");
+  Serial.printf("[DRAWER %d] Bat dau phien — OU%d ON (30 phut)\n", idx + 1,
+                idx + 1);
+  lcdPrint2Rows("Ngan " + String(idx + 1) + ": MO     ",
+                "Cho nut IN" + String(idx + 1) + "... ");
 }
 
-void endDrawer1Session() {
+void endDrawerSession(int idx) {
+  if (idx < 0 || idx > 3)
+    return;
   if (ouManualAllOn) {
     resetCabinetToIdle();
     return;
   }
-  drawer1.sessionActive = false;
-  drawer1.buttonPressed = false;
-  drawer1.missedReported = false;
-  drawer1.notDetectReported = false;
-  drawer1.waitingAiSinceMs = 0;
-  digitalWrite(OU_PINS[0], LOW);
-  setRe1(false);
-  Serial.println("[DRAWER1] Ket thuc phien");
+  drawers[idx].sessionActive = false;
+  drawers[idx].buttonPressed = false;
+  drawers[idx].missedReported = false;
+  drawers[idx].notDetectReported = false;
+  drawers[idx].waitingAiSinceMs = 0;
+  digitalWrite(OU_PINS[idx], LOW);
+  setRe(idx, false);
+  Serial.printf("[DRAWER %d] Ket thuc phien\n", idx + 1);
 }
 
-// Doc xung day du tren IN1; chi xac nhan khi HIGH->LOW->HIGH
-void pollIn1Button() {
-  if (!drawer1.sessionActive || drawer1.buttonPressed) return;
+void pollButton(int idx) {
+  if (idx < 0 || idx > 3)
+    return;
+  if (!drawers[idx].sessionActive || drawers[idx].buttonPressed)
+    return;
 
-  bool level = readIn1();
+  bool pressed = readIn(idx);
 
-  if (in1Phase == BTN_HIGH && !level) {
-    in1Phase = BTN_LOW;
-  } else if (in1Phase == BTN_LOW && level) {
-    drawer1.buttonPressed = true;
-    drawer1.buttonCompleteMs = millis();
-    in1Phase = BTN_HIGH;
-    Serial.println("[DRAWER1] IN1: xung day du — cho 30s tat OU1, bat RE1");
+  if (btnPhases[idx] == BTN_NORMAL && pressed) {
+    btnPhases[idx] = BTN_ACTIVE;
+    Serial.printf("[BUTTON] IN%d: LOW -> HIGH (Pressed)\n", idx + 1);
+  } else if (btnPhases[idx] == BTN_ACTIVE && !pressed) {
+    drawers[idx].buttonPressed = true;
+    drawers[idx].buttonCompleteMs = millis();
+    btnPhases[idx] = BTN_NORMAL;
+    Serial.printf("[BUTTON] IN%d: HIGH -> LOW (Released) — Trọn vẹn 1 xung!\n",
+                  idx + 1);
     lcdPrint2Rows("Da bam nut!    ", "Cho 30 giay... ");
   }
 }
 
-void processDrawer1() {
-  if (ouManualAllOn || !drawer1.sessionActive) return;
-
-  pollIn1Button();
-
-  unsigned long elapsed = millis() - drawer1.ouStartMs;
-
-  // Co nut: sau 30s tat OU1, bat RE1, bat dau dem 10p cho AI
-  if (drawer1.buttonPressed && !drawer1.reOn) {
-    if (millis() - drawer1.buttonCompleteMs >= AFTER_BTN_MS) {
-      setOu1(false);
-      setRe1(true);
-      drawer1.waitingAiSinceMs = millis();
-      Serial.println("[DRAWER1] 30s sau nut — OU1 OFF, RE1 ON, cho AI 10p");
-      lcdPrint2Rows("Cho xac nhan   ", "AI: toi da 10p  ");
-    }
+void processDrawers() {
+  if (ouManualAllOn)
     return;
-  }
 
-  // Da bam nut, RE bat — het 10p khong co AI -> not_detect (chi RE, khong bat OU)
-  if (drawer1.buttonPressed && drawer1.reOn && !drawer1.notDetectReported
-      && drawer1.waitingAiSinceMs > 0) {
-    if (millis() - drawer1.waitingAiSinceMs >= AI_WAIT_MS) {
-      drawer1.notDetectReported = true;
-      setOu1(false);
-      setRe1(true);
-      reportEventToFlask("not_detect");
-      Serial.println("[DRAWER1] Het 10p khong co AI — not_detect, chi RE1 ON");
-      lcdPrint2Rows("!! KHONG XAC   ", "NHAN AI !!     ");
+  for (int i = 0; i < 4; i++) {
+    if (!drawers[i].sessionActive)
+      continue;
+
+    pollButton(i);
+
+    unsigned long elapsed = millis() - drawers[i].ouStartMs;
+
+    // Co nut: sau 30s tat OUi, bat REi, bat dau dem 10p cho AI
+    if (drawers[i].buttonPressed && !drawers[i].reOn) {
+      if (millis() - drawers[i].buttonCompleteMs >= AFTER_BTN_MS) {
+        digitalWrite(OU_PINS[i], LOW);
+        setRe(i, true);
+        drawers[i].waitingAiSinceMs = millis();
+        Serial.printf(
+            "[DRAWER %d] 30s sau nut — OU%d OFF, RE%d ON, cho AI 10p\n", i + 1,
+            i + 1, i + 1);
+        lcdPrint2Rows("Cho xac nhan   ", "AI: toi da 10p  ");
+      }
+      continue;
     }
-    return;
-  }
 
-  // Het 30 phut khong co nut -> missed (OU+RE)
-  if (!drawer1.buttonPressed && !drawer1.missedReported && elapsed >= OU_SESSION_MS) {
-    drawer1.missedReported = true;
-    setOu1(true);
-    setRe1(true);
-    reportEventToFlask("missed");
-    Serial.println("[DRAWER1] Het 30p khong bam nut — missed, RE1+OU1 ON");
-    lcdPrint2Rows("!! CHUA UONG !!", "Bao server...  ");
+    // Da bam nut, RE bat — het 10p khong co AI -> not_detect
+    if (drawers[i].buttonPressed && drawers[i].reOn &&
+        !drawers[i].notDetectReported && drawers[i].waitingAiSinceMs > 0) {
+      if (millis() - drawers[i].waitingAiSinceMs >= AI_WAIT_MS) {
+        drawers[i].notDetectReported = true;
+        digitalWrite(OU_PINS[i], LOW);
+        setRe(i, true);
+        reportEventToFlask(i, "not_detect");
+        Serial.printf(
+            "[DRAWER %d] Het 10p khong co AI — not_detect, chi RE%d ON\n",
+            i + 1, i + 1);
+        lcdPrint2Rows("!! KHONG XAC   ", "NHAN AI !!     ");
+      }
+      continue;
+    }
+
+    // Het 30 phut khong co nut -> missed (OU+RE)
+    if (!drawers[i].buttonPressed && !drawers[i].missedReported &&
+        elapsed >= OU_SESSION_MS) {
+      drawers[i].missedReported = true;
+      digitalWrite(OU_PINS[i], HIGH);
+      setRe(i, true);
+      reportEventToFlask(i, "missed");
+      Serial.printf(
+          "[DRAWER %d] Het 30p khong bam nut — missed, RE%d+OU%d ON\n", i + 1,
+          i + 1, i + 1);
+      lcdPrint2Rows("!! CHUA UONG !!", "Bao server...  ");
+    }
   }
 }
 
-void resetCamera() {
-  Serial.println("[ESP32] Reset ESP32-CAM...");
-  lcdPrint2Rows("Resetting CAM...", "Hay doi...");
-  digitalWrite(RESET_CAM_PIN, LOW);
-  delay(1000);
-  digitalWrite(RESET_CAM_PIN, HIGH);
-  delay(2000);
+bool isAnySessionActive() {
+  for (int i = 0; i < 4; i++) {
+    if (drawers[i].sessionActive)
+      return true;
+  }
+  return false;
 }
 
 // ============================================================
@@ -277,15 +321,44 @@ String buildStatusJson() {
   json += "\"temperature\":" + String(temperature, 1) + ",";
   json += "\"humidity\":" + String((int)humidity) + ",";
   json += "\"drawer1\":{";
-  json += "\"session_active\":" + String(drawer1.sessionActive ? "true" : "false") + ",";
-  json += "\"ou1\":" + String(digitalRead(OU_PINS[0]) == HIGH ? "true" : "false") + ",";
-  json += "\"re1\":" + String(drawer1.reOn ? "true" : "false") + ",";
-  json += "\"in1\":" + String(readIn1() ? "true" : "false") + ",";
-  json += "\"button_pressed\":" + String(drawer1.buttonPressed ? "true" : "false") + ",";
-  json += "\"missed\":" + String(drawer1.missedReported ? "true" : "false") + ",";
-  json += "\"not_detect\":" + String(drawer1.notDetectReported ? "true" : "false") + ",";
+  json += "\"session_active\":" +
+          String(drawers[0].sessionActive ? "true" : "false") + ",";
+  json +=
+      "\"ou1\":" + String(digitalRead(OU_PINS[0]) == HIGH ? "true" : "false") +
+      ",";
+  json += "\"re1\":" + String(drawers[0].reOn ? "true" : "false") + ",";
+  json += "\"in1\":" + String(readIn(0) ? "true" : "false") + ",";
+  json += "\"button_pressed\":" +
+          String(drawers[0].buttonPressed ? "true" : "false") + ",";
+  json += "\"missed\":" + String(drawers[0].missedReported ? "true" : "false") +
+          ",";
+  json += "\"not_detect\":" +
+          String(drawers[0].notDetectReported ? "true" : "false") + ",";
   json += "\"ou_all_on\":" + String(ouManualAllOn ? "true" : "false");
-  json += "}}";
+  json += "},";
+  for (int i = 1; i <= 3; i++) {
+    json += "\"drawer" + String(i + 1) + "\":{";
+    json += "\"session_active\":" +
+            String(drawers[i].sessionActive ? "true" : "false") + ",";
+    json += "\"ou" + String(i + 1) +
+            "\":" + String(digitalRead(OU_PINS[i]) == HIGH ? "true" : "false") +
+            ",";
+    json += "\"re" + String(i + 1) +
+            "\":" + String(drawers[i].reOn ? "true" : "false") + ",";
+    json += "\"in" + String(i + 1) +
+            "\":" + String(readIn(i) ? "true" : "false") + ",";
+    json += "\"button_pressed\":" +
+            String(drawers[i].buttonPressed ? "true" : "false") + ",";
+    json +=
+        "\"missed\":" + String(drawers[i].missedReported ? "true" : "false") +
+        ",";
+    json += "\"not_detect\":" +
+            String(drawers[i].notDetectReported ? "true" : "false");
+    json += "}";
+    if (i < 3)
+      json += ",";
+  }
+  json += "}";
   return json;
 }
 
@@ -294,37 +367,36 @@ void handleStatus() {
   server.send(200, "application/json", buildStatusJson());
 }
 
-// GET /re?state=on|off&drawer=0
 void handleRe() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   String state = server.hasArg("state") ? server.arg("state") : "";
   state.toLowerCase();
   int drawer = server.hasArg("drawer") ? server.arg("drawer").toInt() : 0;
-  if (drawer < 0 || drawer > 3) drawer = 0;
+  if (drawer < 0 || drawer > 3)
+    drawer = 0;
 
   if (state == "off") {
     digitalWrite(RE_PINS[drawer], LOW);
-    if (drawer == 0) {
-      drawer1.reOn = false;
-      endDrawer1Session();
-      lcdPrint2Rows("IP:" + WiFi.localIP().toString(), "  ESP32 IP  ");
-      Serial.println("[HTTP] RE1 TAT — ket thuc phien (xac nhan uong thuoc)");
-    }
+    drawers[drawer].reOn = false;
+    endDrawerSession(drawer);
+    lcdPrint2Rows("IP:" + WiFi.localIP().toString(), "  ESP32 IP  ");
+    Serial.printf("[HTTP] RE%d TAT — ket thuc phien\n", drawer + 1);
   } else if (state == "on") {
     digitalWrite(RE_PINS[drawer], HIGH);
-    if (drawer == 0) drawer1.reOn = true;
-    Serial.println("[HTTP] RE bat — drawer " + String(drawer));
+    drawers[drawer].reOn = true;
+    Serial.printf("[HTTP] RE%d bat\n", drawer + 1);
   } else {
-    server.send(400, "application/json", "{\"error\":\"state phai la on hoac off\"}");
+    server.send(400, "application/json",
+                "{\"error\":\"state phai la on hoac off\"}");
     return;
   }
 
   String json = "{\"status\":\"ok\",\"drawer\":" + String(drawer) + ",\"re\":";
-  json += (digitalRead(RE_PINS[drawer]) == HIGH ? "true" : "false") + "}";
+  json += (digitalRead(RE_PINS[drawer]) == HIGH ? "true" : "false");
+  json += "}";
   server.send(200, "application/json", json);
 }
 
-// Tuong thich code cu: /led -> RE1
 void handleLed() {
   if (!server.hasArg("state") && server.hasArg("drawer")) {
     handleRe();
@@ -334,17 +406,19 @@ void handleLed() {
   String state = server.hasArg("state") ? server.arg("state") : "";
   state.toLowerCase();
   if (state == "on") {
-    setRe1(true);
+    setRe(0, true);
   } else if (state == "off") {
     digitalWrite(RE_PINS[0], LOW);
-    drawer1.reOn = false;
-    endDrawer1Session();
+    drawers[0].reOn = false;
+    endDrawerSession(0);
   } else {
-    server.send(400, "application/json", "{\"error\":\"state phai la on hoac off\"}");
+    server.send(400, "application/json",
+                "{\"error\":\"state phai la on hoac off\"}");
     return;
   }
   server.send(200, "application/json",
-    "{\"status\":\"ok\",\"re\":" + String(drawer1.reOn ? "true" : "false") + "}");
+              "{\"status\":\"ok\",\"re\":" +
+                  String(drawers[0].reOn ? "true" : "false") + "}");
 }
 
 void handleOpenDrawer() {
@@ -356,10 +430,10 @@ void handleOpenDrawer() {
     Serial.println("[HTTP] Flask callback: " + flaskCallbackUrl);
   }
 
-  if (idx == 0) {
-    startDrawer1Session();
+  if (idx >= 0 && idx <= 3) {
+    startDrawerSession(idx);
   } else {
-    Serial.println("[HTTP] open_drawer idx=" + String(idx) + " — chua ho tro");
+    Serial.println("[HTTP] open_drawer idx=" + String(idx) + " — khong hop le");
   }
 
   String json = "{\"status\":\"ok\",\"drawer\":" + String(idx) + "}";
@@ -369,26 +443,18 @@ void handleOpenDrawer() {
 void handleToggle() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   bool cur = digitalRead(RE_PINS[0]) == HIGH;
-  setRe1(!cur);
+  setRe(0, !cur);
   server.send(200, "application/json",
-    "{\"status\":\"ok\",\"re\":" + String(drawer1.reOn ? "true" : "false") + "}");
+              "{\"status\":\"ok\",\"re\":" +
+                  String(drawers[0].reOn ? "true" : "false") + "}");
 }
 
-void handleResetCam() {
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  isCamConnected = false;
-  camIP = "";
-  resetCamera();
-  lcdPrint2Rows("IP:" + WiFi.localIP().toString(), "Waiting CAM...");
-  server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Camera reset\"}");
-}
-
-// GET /reset_ou — bat tat ca OU; bam lai -> tat OU + ve idle
 void handleResetOu() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   toggleOuReset();
   String json = "{\"status\":\"ok\",\"ou_all_on\":";
-  json += (ouManualAllOn ? "true" : "false") + "}";
+  json += (ouManualAllOn ? "true" : "false");
+  json += "}";
   server.send(200, "application/json", json);
 }
 
@@ -400,13 +466,25 @@ void setTemperature(float temp, float hum) {
   temperature = temp;
   humidity = hum;
   tempStr = String(temp, 1) + "C";
-  lcdUpdateTemp();
-  if (temp > 37.5 || hum > 80) {
-    Serial.println("[CANH BAO] Nhiet do hoac do am qua cao!");
-    lcdPrint2Rows("!! CANH BAO !!  ", "T:" + String(temp, 1) + "C H:" + String(hum, 0) + "%");
-    delay(2000);
+  if (!isAnySessionActive() && !ouManualAllOn) {
     lcdUpdateTemp();
+    if (temp > 37.5 || hum > 80) {
+      Serial.println("[CANH BAO] Nhiet do hoac do am qua cao!");
+      lcdPrint2Rows("!! CANH BAO !!  ",
+                    "T:" + String(temp, 1) + "C H:" + String(hum, 0) + "%");
+      delay(2000);
+      lcdUpdateTemp();
+    }
   }
+}
+
+void resetCamera() {
+  Serial.println("[ESP32] Reset ESP32-CAM...");
+  lcdPrint2Rows("Resetting CAM..", "Hay doi...     ");
+  digitalWrite(RESET_CAM_PIN, LOW);
+  delay(1000);
+  digitalWrite(RESET_CAM_PIN, HIGH);
+  delay(2000);
 }
 
 void setupGpio() {
@@ -423,10 +501,13 @@ void setupGpio() {
   digitalWrite(RESET_CAM_PIN, HIGH);
 }
 
+// ============================================================
+//  SETUP
+// ============================================================
+
 void setup() {
-  WiFiManager wm;
-  dht.begin();
   Serial.begin(115200);
+  dht.begin();
 
   camSerial.begin(9600, SERIAL_8N1, RX2_PIN, TX2_PIN);
   delay(500);
@@ -440,15 +521,17 @@ void setup() {
   Serial.println("\n\n--- KHOI DONG HE THONG (ESP32) ---");
   setupGpio();
 
+  // ----- WiFiManager -----
+  WiFiManager wm;
   lcdPrint2Rows(" Dang ket noi ! ", "SSID:Setup_Cam  ");
   wm.setConfigPortalTimeout(180);
-  wm.setAPCallback([](WiFiManager* wm) {
+  wm.setAPCallback([](WiFiManager *wm) {
     lcdPrint2Rows(" Che do Config ", "AP:Setup_Camera ");
   });
 
   bool res = wm.autoConnect("Setup_Camera", "12345678");
   if (!res) {
-    lcdPrint2Rows("! Ket noi that bai!", "Khoi dong lai..");
+    lcdPrint2Rows("Ket noi that bai", "Khoi dong lai..");
     delay(3000);
     ESP.restart();
   }
@@ -457,34 +540,60 @@ void setup() {
   Serial.println("[OK] ESP32 IP: " + ipStr);
   lcdPrint2Rows("IP:" + ipStr, "Temp: " + tempStr);
 
-  server.on("/status",      HTTP_GET, handleStatus);
-  server.on("/re",          HTTP_GET, handleRe);
-  server.on("/led",         HTTP_GET, handleLed);
+  // ----- Reset & cho CAM -----
+  resetCamera();
+  lcdPrint2Rows("IP:" + ipStr, "Dang cho CAM...");
+  while (camSerial.available()) {
+    camSerial.read();
+  }
+
+  // ----- WebServer Routes -----
+  server.on("/status", HTTP_GET, handleStatus);
+  server.on("/re", HTTP_GET, handleRe);
+  server.on("/led", HTTP_GET, handleLed);
   server.on("/open_drawer", HTTP_GET, handleOpenDrawer);
-  server.on("/toggle",      HTTP_GET, handleToggle);
-  server.on("/reset_cam",   HTTP_GET, handleResetCam);
-  server.on("/reset_ou",    HTTP_GET, handleResetOu);
+  server.on("/toggle", HTTP_GET, handleToggle);
+  server.on("/reset_ou", HTTP_GET, handleResetOu);
   server.onNotFound(handleNotFound);
   server.begin();
+  Serial.println("[OK] WebServer started");
 
-  resetCamera();
-  lcdPrint2Rows("IP:" + WiFi.localIP().toString(), "Dang cho CAM...");
-  while (camSerial.available()) { camSerial.read(); }
   lastWiFiTime = millis();
 }
 
+// ============================================================
+//  LOOP
+// ============================================================
+
 void loop() {
   server.handleClient();
-  processDrawer1();
+  processDrawers();
 
+  // Doc nhiet do / do am moi 5 giay
   static unsigned long lastTempTime = 0;
-  if (millis() - lastTempTime > 5000) {
+  if (millis() - lastTempTime > 3000) {
     float t = dht.readTemperature();
     float h = dht.readHumidity();
-    if (!isnan(t) && !isnan(h)) setTemperature(t, h);
+
+    // In thẳng ra Serial Monitor để kiểm tra thông số gốc
+    Serial.print("[TEST DHT] T: ");
+    Serial.print(t);
+    Serial.print(" - H: ");
+    Serial.println(h);
+
+    if (isnan(t) || isnan(h)) {
+      // Nếu không đọc được, bắt buộc LCD phải hiện cảnh báo
+      if (!isAnySessionActive() && !ouManualAllOn) {
+        lcdPrintRow(1, "Loi DHT: NaN    ");
+      }
+    } else {
+      // Nếu đọc được bình thường, hiển thị nhiệt độ
+      setTemperature(t, h);
+    }
     lastTempTime = millis();
   }
 
+  // Kiem tra WiFi — restart neu mat ket noi qua 15 giay
   if (WiFi.status() != WL_CONNECTED) {
     if (millis() - lastWiFiTime > 15000) {
       lcdPrint2Rows("! Mat WIFI !   ", "Khoi dong lai...");
@@ -496,6 +605,7 @@ void loop() {
     lastWiFiTime = millis();
   }
 
+  // Gui SSID/pass cho CAM qua UART cho den khi CAM ket noi
   if (!isCamConnected && WiFi.status() == WL_CONNECTED) {
     if (millis() - lastSendTime > 4000) {
       String payload = "WIFI:" + WiFi.SSID() + "," + WiFi.psk();
@@ -504,18 +614,23 @@ void loop() {
     }
   }
 
+  // Doc phan hoi tu CAM qua UART
   while (camSerial.available()) {
     String data = camSerial.readStringUntil('\n');
     data.trim();
-    if (data.length() > 0) Serial.println("[CAM]: " + data);
+    if (data.length() > 0)
+      Serial.println("[CAM]: " + data);
 
     if (data.startsWith("IP:")) {
       camIP = data.substring(3);
+      camIP.trim();
       isCamConnected = true;
       Serial.println("[THANH CONG] IP Camera: " + camIP);
-      lcdPrint2Rows(camIP, "IP Cua ESP32-CAM");
-      delay(3000);
-      lcdPrint2Rows(WiFi.localIP().toString(), "  ESP32 IP  ");
+      if (!isAnySessionActive() && !ouManualAllOn) {
+        lcdPrint2Rows(camIP, "IP Cua ESP32-CAM");
+        delay(3000);
+        lcdPrint2Rows(WiFi.localIP().toString(), "  ESP32 IP  ");
+      }
     }
   }
 }

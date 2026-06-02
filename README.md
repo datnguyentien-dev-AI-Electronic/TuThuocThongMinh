@@ -1,150 +1,168 @@
-# Tủ Thuốc Thông Minh
+# 💊 HỆ THỐNG TỦ THUỐC THÔNG MINH — SMARTMED CABINET PRO 🚀
 
-Tủ Thuốc Thông Minh là hệ thống hỗ trợ quản lý lịch uống thuốc, điều khiển ngăn thuốc và theo dõi quá trình uống thuốc bằng camera. Dự án kết hợp web server Flask, cơ sở dữ liệu SQLite, ESP32/ESP8266, ESP32-CAM và mô hình nhận diện cử chỉ bằng OpenCV + MediaPipe.
+> Hệ thống quản lý tủ thuốc thông minh hỗ trợ nhắc lịch uống thuốc tự động, điều khiển mở ngăn thuốc, nhấp nháy đèn LED nhắc nhở và tự động theo dõi, ghi nhận hành vi uống thuốc bằng trí tuệ nhân tạo (OpenCV + MediaPipe).
 
-## Chức Năng Chính
+Dự án là sự kết hợp hoàn chỉnh giữa **Web Server Flask** (Cơ sở dữ liệu SQLite cục bộ), mô hình **AI Nhận diện hành vi uống thuốc** trên máy chủ và **Phần cứng vi điều khiển ESP32 + ESP32-CAM** giao tiếp thời gian thực qua mạng LAN.
 
-- Quản lý nhiều tủ thuốc theo tên và địa chỉ IP.
-- Cấu hình lịch nhắc uống thuốc cho từng ngăn.
-- Lưu thông tin thuốc: tên thuốc, liều dùng, số lượng, loại thuốc và ghi chú.
-- Điều khiển ngăn thuốc, đèn hoặc tín hiệu nhắc thông qua API của ESP.
-- Theo dõi camera ESP32-CAM theo thời gian thực.
-- Nhận diện hành động uống thuốc theo 2 bước: đưa thuốc lên miệng và uống nước.
-- Ghi lại lịch sử uống thuốc để theo dõi sau này.
+---
 
-## Công Nghệ Sử Dụng
+## 🌟 CÁC TÍNH NĂNG NỔI BẬT
 
-- Backend: Flask, Flask-SQLAlchemy
-- Database: SQLite
-- Xử lý ảnh: OpenCV, MediaPipe, NumPy
-- Giao diện: HTML, CSS, JavaScript
-- Phần cứng: ESP32, ESP32-CAM
+- **Quản lý đa tủ thuốc (Multi-Cabinet):** Quản lý đồng thời nhiều tủ thuốc thông qua tên và địa chỉ IP tĩnh/động trong mạng LAN.
+- **Phân chia 4 ngăn thông minh (4-Drawer Session Management):** Hỗ trợ đầy đủ 4 ngăn thuốc tương ứng với lịch uống (Sáng, Trưa, Chiều, Tối). Mỗi ngăn hoạt động độc lập và song song.
+- **Bảo vệ màn hình LCD diện rộng:** Tự động khóa luồng hiển thị cảm biến nhiệt độ/độ ẩm DHT11 khi có ngăn tủ đang hoạt động, ngăn chặn tình trạng ghi đè chữ hoặc nhấp nháy màn hình.
+- **Xử lý nút bấm thông minh chống nhiễu (Active-Low Software Pulse):** Áp dụng thuật toán chuyển đổi trạng thái logic và phát hiện **trọn vẹn 1 xung bấm vật lý** (`Thả -> Nhấn -> Thả`), loại bỏ hiện tượng báo động giả khi vừa khởi động thiết bị có trở kéo lên (Pull-up).
+- **Trình nhận diện hành vi bằng AI (Camera Real-time Stream):** Tích hợp luồng camera từ ESP32-CAM truyền trực tiếp về Web Server Flask, xử lý thời gian thực qua MediaPipe để phát hiện chính xác 2 bước uống thuốc (Đưa thuốc lên miệng và đưa cốc nước lên uống) rồi tự động tắt đèn nhắc nhở và lưu lịch sử.
+- **Hệ thống cảnh báo cảm biến:** Hiển thị cảnh báo trực quan trên màn hình LCD khi nhiệt độ > 37.5°C hoặc độ ẩm > 80% để bảo quản thuốc tốt nhất.
 
-## Cấu Trúc Dự Án
+---
+
+## 🔌 CẤU HÌNH PHẦN CỨNG & SƠ ĐỒ CHÂN (WIRING DIAGRAM)
+
+Thiết bị sử dụng vi điều khiển chính **ESP32 DevKit V1** kết hợp với **ESP32-CAM**. Các chân GPIO đầu vào/đầu ra được cấu hình cụ thể như sau:
+
+### 1. Sơ đồ kết nối ESP32 chính
+
+| Tên chân (Logic) | Chân GPIO (ESP32) | Loại Chân | Chức năng | Trạng thái vật lý |
+| :--- | :---: | :---: | :--- | :--- |
+| **IN1** | `36` (VP) | Input | Nút bấm phản hồi Ngăn 1 | Có trở kéo lên ngoại (Mặc định `HIGH`, bấm `LOW`) |
+| **IN2** | `39` (VN) | Input | Nút bấm phản hồi Ngăn 2 | Có trở kéo lên ngoại (Mặc định `HIGH`, bấm `LOW`) |
+| **IN3** | `34` | Input | Nút bấm phản hồi Ngăn 3 | Có trở kéo lên ngoại (Mặc định `HIGH`, bấm `LOW`) |
+| **IN4** | `35` | Input | Nút bấm phản hồi Ngăn 4 | Có trở kéo lên ngoại (Mặc định `HIGH`, bấm `LOW`) |
+| **OU1** | `23` | Output | Kích mở khóa chốt Ngăn 1 | Mức cao (`HIGH`) = Mở ngăn, mức thấp (`LOW`) = Khóa |
+| **OU2** | `19` | Output | Kích mở khóa chốt Ngăn 2 | Mức cao (`HIGH`) = Mở ngăn, mức thấp (`LOW`) = Khóa |
+| **OU3** | `18` | Output | Kích mở khóa chốt Ngăn 3 | Mức cao (`HIGH`) = Mở ngăn, mức thấp (`LOW`) = Khóa |
+| **OU4** | `4` | Output | Kích mở khóa chốt Ngăn 4 | Mức cao (`HIGH`) = Mở ngăn, mức thấp (`LOW`) = Khóa |
+| **RE1** | `25` | Output | Đèn LED nhắc nhở Ngăn 1 | Mức cao (`HIGH`) = Sáng đèn nhấp nháy, `LOW` = Tắt |
+| **RE2** | `26` | Output | Đèn LED nhắc nhở Ngăn 2 | Mức cao (`HIGH`) = Sáng đèn nhấp nháy, `LOW` = Tắt |
+| **RE3** | `27` | Output | Đèn LED nhắc nhở Ngăn 3 | Mức cao (`HIGH`) = Sáng đèn nhấp nháy, `LOW` = Tắt |
+| **RE4** | `14` | Output | Đèn LED nhắc nhở Ngăn 4 | Mức cao (`HIGH`) = Sáng đèn nhấp nháy, `LOW` = Tắt |
+| **Buzzer** | `33` | Output | Còi báo động | Kêu bíp 150ms khi bắt đầu mở ngăn |
+| **Reset CAM**| `13` | Output | Reset ESP32-CAM | Mức thấp (`LOW`) kích hoạt Reset camera |
+| **DHT11** | `32` | Data Pin | Cảm biến nhiệt độ/độ ẩm | Đọc dữ liệu môi trường bảo quản thuốc |
+| **SDA/SCL** | `21` / `22` | I2C Bus | Giao tiếp LCD 16x2 | Hiển thị trạng thái hoạt động và IP |
+
+---
+
+## 🛠️ CẤU TRÚC THƯ MỤC DỰ ÁN
 
 ```text
 .
-|-- app.py                         # Web server Flask và các API chính
-|-- database.py                    # Khai báo database model bằng SQLAlchemy
-|-- medicine_detector.py           # Xử lý nhận diện hành động uống thuốc
-|-- cabinets.json                  # Dữ liệu tủ thuốc cũ, dùng để migrate nếu cần
-|-- requirements.txt               # Danh sách thư viện Python cần cài
-|-- templates/                     # Các trang HTML của Flask
-|-- static/                        # CSS và JavaScript của giao diện web
-|-- firebase_app/                  # Giao diện Firebase riêng
-|-- esp32_wifi_sender/             # Mã Arduino cho ESP điều khiển tủ thuốc
-|-- esp32cam_wifi_receiver/        # Mã Arduino cho ESP32-CAM/receiver
-`-- instance/                      # Chứa database SQLite khi chạy app, không đưa lên Git
+├── app.py                         # Web Server Flask, API Routes và Xử lý AI Stream
+├── database.py                    # Khai báo các mô hình dữ liệu (SQLite + SQLAlchemy)
+├── medicine_detector.py           # Bộ nhận diện cử chỉ uống thuốc (MediaPipe + OpenCV)
+├── cabinets.json                  # Tệp lưu trữ tủ thuốc cũ (dùng để di trú dữ liệu)
+├── requirements.txt               # Danh sách thư viện Python cần thiết
+├── templates/                     # Các trang giao diện HTML (index, cabinets, observe,...)
+├── static/                        
+│   ├── css/                       # Tệp định dạng giao diện CSS (vibrant glassmorphism)
+│   └── js/app.js                  # Logic điều khiển, đồng bộ đồng hồ, gọi APIs
+├── esp32_wifi_sender/             
+│   └── esp32_wifi_sender.ino      # Firmware chính cho ESP32 điều khiển tủ và cảm biến
+├── esp32cam_wifi_receiver/        
+│   └── esp32cam_wifi_receiver.ino # Firmware phụ cho ESP32-CAM truyền luồng MJPEG
+└── instance/                      
+    └── pillbox.db                 # Cơ sở dữ liệu SQLite cục bộ (Tự động tạo)
 ```
 
-## Yêu Cầu Trước Khi Chạy
+---
 
-- Python 3.10 hoặc 3.11 được khuyến nghị.
-- Máy tính chạy server và ESP/camera nên cùng một mạng LAN.
-- Arduino IDE hoặc công cụ tương đương để nạp firmware cho ESP.
-- Camera ESP32-CAM đã được cấu hình để cung cấp luồng video.
+## 🔌 CHI TIẾT CÁC HTTP APIs GIAO TIẾP (WEB ⇆ ESP32)
 
-Lưu ý: MediaPipe có thể chưa hỗ trợ tốt một số phiên bản Python mới. Nếu cài đặt lỗi trên Python 3.12 hoặc 3.13, hãy dùng Python 3.10 hoặc 3.11.
+Các yêu cầu HTTP được truyền nhận trực tiếp thông qua địa chỉ IP của thiết bị trong mạng LAN:
 
-## Cài Đặt
+### 1. APIs Web gọi đến ESP32
+* **`GET /status`**: Lấy trạng thái thời gian thực của cảm biến DHT11 và 4 ngăn tủ.
+  * *Response JSON Schema:*
+    ```json
+    {
+      "connected": true,
+      "cam_ip": "192.168.1.100",
+      "esp_ip": "192.168.1.101",
+      "ssid": "MyWiFi",
+      "rssi": -65,
+      "temperature": 28.5,
+      "humidity": 65,
+      "drawer1": {
+        "session_active": false,
+        "ou1": false,
+        "re1": false,
+        "in1": false,
+        "button_pressed": false,
+        "missed": false,
+        "not_detect": false,
+        "ou_all_on": false
+      },
+      "drawer2": { ... },
+      "drawer3": { ... },
+      "drawer4": { ... }
+    }
+    ```
+* **`GET /open_drawer?idx=<0..3>&callback=<server_url>`**: Khởi động phiên uống thuốc tại ngăn thuốc chỉ định (Ngăn 1 đến 4).
+* **`GET /re?drawer=<0..3>&state=<on|off>`**: Điều khiển bật/tắt thủ công đèn LED nhắc nhở.
+* **`GET /toggle`**: Đảo trạng thái đèn LED nhắc nhở ngăn 1.
+* **`GET /reset_ou`**: Mở chốt đồng thời cả 4 ngăn (dùng khi bảo trì/nạp thuốc) hoặc đóng lại toàn bộ và đưa tủ về trạng thái chờ.
 
-Tạo môi trường ảo:
+### 2. APIs ESP32 báo cáo ngược về Flask
+* **`POST /api/drawer/missed`**: Báo cáo sự kiện khi đến giờ hẹn:
+  * **missed**: Quá 30 phút mà người dùng không nhấn nút mở tủ (ESP32 sẽ bật cả còi, chốt khóa và đèn để gây chú ý).
+  * **not_detect**: Người dùng đã bấm nút lấy thuốc nhưng quá 10 phút trôi qua mà camera AI không xác thực được hành động uống thuốc thành công.
 
+---
+
+## 🤖 QUY TRÌNH HOẠT ĐỘNG CỦA MÁY TRẠNG THÁI (STATE MACHINE)
+
+- **Trạng thái rảnh (Idle):** Hệ thống hiển thị IP của ESP32 và cảm biến DHT11 lên LCD 16x2. Chờ lệnh từ Flask Server.
+- **Bắt đầu phiên (Drawer Active):** Khi có lệnh hẹn giờ gửi từ Web, còi kêu 150ms, mở khóa `OU` tương ứng trong 30 phút.
+- **Nếu quá 30 phút không nhấn nút (Missed):** Mạch tự động bật cả khóa chốt `OU` và đèn `RE` nhấp nháy liên tục để cảnh báo người dùng, đồng thời gọi Flask API báo cáo `missed`.
+- **Nếu nhấn nút (Xung logic LOW -> HIGH -> LOW):** Sau 30 giây, đóng khóa chốt `OU` lại để đảm bảo an toàn, đồng thời bật đèn nhắc nhở `RE` và bắt đầu đếm ngược 10 phút chờ camera AI quét cử chỉ.
+- **Trí tuệ nhân tạo xác nhận thành công (Completed):** OpenCV + MediaPipe quét thấy cử chỉ uống thuốc thành công, Web gửi tín hiệu tắt đèn `RE`, kết thúc phiên hoạt động và lưu lịch sử.
+- **Quá 10 phút không thấy cử chỉ (Not Detect):** Đèn `RE` giữ nguyên trạng thái sáng nhắc nhở, đồng thời gọi Flask API báo cáo `not_detect`.
+
+---
+
+## ⚙️ CÀI ĐẶT & VẬN HÀNH DỰ ÁN
+
+### 1. Chuẩn bị Môi trường Python
+Khuyến nghị sử dụng **Python 3.10** hoặc **3.11** để tương thích tốt nhất với thư viện OpenCV và MediaPipe.
+
+Tạo môi trường ảo và cài đặt thư viện phụ thuộc:
 ```powershell
+# Tạo môi trường ảo
 python -m venv .venv
-```
 
-Kích hoạt môi trường ảo trên Windows PowerShell:
-
-```powershell
+# Kích hoạt trên Windows PowerShell
 .\.venv\Scripts\Activate.ps1
-```
 
-Cài đặt các thư viện cần thiết:
-
-```powershell
+# Cài đặt thư viện
 pip install -r requirements.txt
 ```
 
-## Chạy Ứng Dụng
+### 2. Cấu hình và nạp code cho ESP32
+1. Mở tệp [esp32_wifi_sender.ino](file:///e:/PillBox/Source/esp32_wifi_sender/esp32_wifi_sender.ino) bằng Arduino IDE.
+2. Cài đặt các thư viện cần thiết: `DHT sensor library`, `LiquidCrystal_I2C`, `WiFiManager`.
+3. Biên dịch và nạp code vào mạch ESP32.
+4. Khi chạy lần đầu, ESP32 sẽ phát một Wi-Fi Access Point tên là **`Setup_Camera`** (mật khẩu `12345678`). Bạn dùng điện thoại kết nối vào Wi-Fi này, trình duyệt sẽ tự động mở trang Portal cấu hình. Bạn chọn mạng Wi-Fi nhà mình, nhập mật khẩu và nhấn Save. ESP32 sẽ ghi nhớ cấu hình và tự động kết nối trong những lần sau.
 
-Chạy Flask server:
-
+### 3. Khởi động Web Server
+Khởi chạy Server Flask trên máy tính:
 ```powershell
 python app.py
 ```
+Sau đó, truy cập trình duyệt tại địa chỉ mặc định: [http://localhost:5000](http://localhost:5000).
 
-Sau khi chạy thành công, mở trình duyệt tại:
+---
 
-```text
-http://localhost:5000
-```
+## ⚡ HƯỚNG DẪN XỬ LÝ LỖI NHANH (TROUBLESHOOTING)
 
-Server mặc định chạy ở địa chỉ `0.0.0.0:5000`, vì vậy các thiết bị trong cùng mạng LAN có thể truy cập bằng IP của máy tính chạy server.
+- **Trạng thái hiển thị "Mất kết nối" (Offline) mặc dù ESP32 đang chạy:**
+  * **Nguyên nhân:** Địa chỉ IP của tủ lưu trong Database bị lệch so với địa chỉ IP thực tế mà Router cấp cho ESP32 qua Wi-Fi.
+  * **Giải pháp:** Xem địa chỉ IP hiển thị trên màn hình LCD của ESP32 (ví dụ: `192.168.1.13`). Sau đó, truy cập giao diện Web -> Trang **Quản lý tủ thuốc** -> Nhấn biểu tượng **Sửa (✏️)** -> Thay đổi IP thành đúng địa chỉ hiển thị trên LCD và nhấn **Lưu** -> Chọn sử dụng tủ thuốc này.
+  * **Tối ưu hóa:** Hệ thống đã tăng giá trị `timeout` gọi HTTP kiểm tra trạng thái từ `1.0s` lên **`2.5s`** để đảm bảo Flask không báo mất kết nối ảo khi mạch ESP32 bận đọc cảm biến DHT11.
 
-## Các Trang Chính
+- **Lỗi IP Camera của ESP32-CAM bị hiển thị sai ký tự hoặc không kết nối được:**
+  * **Nguyên nhân:** Tệp cấu hình cũ so khớp `data.startsWith("")` (luôn đúng đối với mọi log debug truyền qua Serial), dẫn đến việc camera gửi tin nhắn debug ngẫu nhiên nào cũng bị ngộ nhận là IP.
+  * **Đã sửa đổi:** Cú pháp đã được sửa thành `data.startsWith("IP:")` và tích hợp bộ cắt khoảng trắng `.trim()` giúp lọc chính xác tuyệt đối địa chỉ IP camera truyền qua cổng Serial UART.
 
-- `/` - trang tổng quan.
-- `/cabinets` - quản lý danh sách tủ thuốc.
-- `/config` - cấu hình kết nối ESP.
-- `/cabinet` - điều khiển tủ thuốc.
-- `/observe` - theo dõi camera và nhận diện hành động uống thuốc.
-- `/history` - xem lịch sử uống thuốc.
-
-## Cách Hoạt Động Tổng Quát
-
-1. Người dùng thêm tủ thuốc bằng tên và địa chỉ IP của ESP.
-2. Người dùng cấu hình lịch uống thuốc cho từng ngăn.
-3. Khi đến giờ, hệ thống gửi tín hiệu đến ESP để nhắc uống thuốc.
-4. Camera ESP32-CAM truyền hình ảnh về server.
-5. `medicine_detector.py` xử lý hình ảnh bằng MediaPipe để kiểm tra thao tác uống thuốc.
-6. Khi phát hiện hoàn thành, hệ thống ghi log vào SQLite và cập nhật trạng thái.
-
-## Database
-
-Ứng dụng sử dụng SQLite thông qua Flask-SQLAlchemy. Khi chạy `python app.py`, database sẽ được tạo tự động trong thư mục `instance/`.
-
-File `instance/pillbox.db` là dữ liệu runtime, không nên commit lên Git. Nếu `cabinets.json` tồn tại và database đang trống, ứng dụng sẽ tự động migrate dữ liệu tủ thuốc từ JSON sang SQLite.
-
-## Firmware ESP
-
-Mã nguồn cho phần cứng nằm trong:
-
-- `esp32_wifi_sender/`
-- `esp32cam_wifi_receiver/`
-
-Trước khi nạp firmware, cần kiểm tra và cập nhật:
-
-- Tên WiFi và mật khẩu WiFi.
-- Địa chỉ IP hoặc endpoint của server Flask.
-- Chân kết nối relay, LED, cảm biến hoặc module phần cứng.
-- Luồng camera nếu dùng ESP32-CAM.
-
-## Lưu Ý Bảo Mật
-
-- Không commit file `.env`, token, mật khẩu WiFi hoặc khóa bí mật.
-- Không commit database SQLite trong thư mục `instance/`.
-- Nếu dùng Firebase, cần cấu hình Firebase Realtime Database Rules phù hợp. Firebase web `apiKey` thường là cấu hình client, nhưng quyền đọc/ghi dữ liệu phải được kiểm soát bằng rules.
-- Khi triển khai thật, không nên chạy Flask ở chế độ `debug=True`.
-
-## Xử Lý Lỗi Thường Gặp
-
-Nếu không cài được MediaPipe:
-
-```powershell
-python --version
-```
-
-Kiểm tra phiên bản Python và chuyển sang Python 3.10 hoặc 3.11 nếu cần.
-
-Nếu không truy cập được ESP:
-
-- Kiểm tra máy tính và ESP có cùng mạng LAN không.
-- Kiểm tra địa chỉ IP của ESP trong trang cấu hình.
-- Thử truy cập API của ESP trực tiếp bằng trình duyệt.
-
-Nếu camera không hiển thị:
-
-- Kiểm tra URL stream của ESP32-CAM.
-- Kiểm tra nguồn cấp cho ESP32-CAM.
-- Kiểm tra server Flask có nhận được `cam_ip` từ ESP hay không.
+---
+💡 *Dự án được xây dựng và tối ưu hóa tỉ mỉ bởi đội ngũ SmartMed Việt Nam. Mọi thắc mắc và đóng góp ý kiến vui lòng gửi yêu cầu hỗ trợ qua cổng quản lý mã nguồn.*

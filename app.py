@@ -42,11 +42,6 @@ def load_cabinets():
         return []
 
 
-def save_cabinets(cabinets_data):
-    """Legacy function - no longer used with DB but kept for compatibility during migration."""
-    pass
-
-
 def get_active_cabinet():
     """Lay tu thuoc dang duoc chon tu session."""
     cabinet_uuid = session.get('active_cabinet_id')
@@ -382,7 +377,7 @@ def api_stats():
     # Kiểm tra trạng thái kết nối (Ping ESP)
     online = False
     try:
-        resp = requests.get(f"http://{cab.ip}/status", timeout=1.0)
+        resp = requests.get(f"http://{cab.ip}/status", timeout=2.5)
         online = (resp.status_code == 200)
     except:
         online = False
@@ -412,7 +407,7 @@ def api_cabinets_ping_all():
     results = {}
     for cab in cabinets:
         try:
-            resp = requests.get(f"http://{cab['ip']}/status", timeout=1.5)
+            resp = requests.get(f"http://{cab['ip']}/status", timeout=2.5)
             results[cab['id']] = {'online': resp.status_code == 200}
         except Exception:
             results[cab['id']] = {'online': False}
@@ -450,20 +445,19 @@ def config():
 
 @app.route('/save_config', methods=['POST'])
 def save_config():
-    """Legacy: save ESP IP — redirect to add cabinet flow."""
+    """Save ESP IP as a new cabinet directly to SQLite database."""
     esp_ip = request.form.get('esp_ip')
     if esp_ip:
-        esp_ip = esp_ip.replace('http://', '').replace('/', '')
-        # Add as new cabinet with default name
-        cabinets = load_cabinets()
-        new_cab = {
-            'id': str(uuid.uuid4())[:8],
-            'name': f'Tủ thuốc {len(cabinets) + 1}',
-            'ip': esp_ip
-        }
-        cabinets.append(new_cab)
-        save_cabinets(cabinets)
-        session['active_cabinet_id'] = new_cab['id']
+        esp_ip = esp_ip.replace('http://', '').replace('/', '').strip()
+        count = Cabinet.query.count()
+        new_cab = Cabinet(
+            uuid=str(uuid.uuid4())[:8],
+            name=f'Tủ thuốc {count + 1}',
+            ip=esp_ip
+        )
+        db.session.add(new_cab)
+        db.session.commit()
+        session['active_cabinet_id'] = new_cab.uuid
         session['esp_ip'] = esp_ip
         return redirect(url_for('cabinet'))
     return redirect(url_for('cabinets'))
