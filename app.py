@@ -22,13 +22,18 @@ app.secret_key = os.urandom(24)
 # Database Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pillbox.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'connect_args': {
+        'timeout': 15
+    }
+}
 db.init_app(app)
 
 # ===== Global detector state (one shared instance) =====
 _processor: MedicineFrameProcessor = None
 _processor_lock = threading.Lock()
-_re_triggered = False   # Tranh goi API RE nhieu lan trong cung 1 session
-_current_esp_ip = ''     # Luu IP ESP8266 de dung trong background thread
+_re_triggered = {}   # Dict luu trang thai RE triggered theo (cabinet_id, drawer_idx)
+_current_esp_ip = ''     # Luu IP ESP32 de dung trong background thread
 
 # ===== Cabinet storage =====
 CABINETS_FILE = os.path.join(os.path.dirname(__file__), 'cabinets.json')
@@ -146,6 +151,7 @@ def api_cabinet_add():
     )
     db.session.add(new_cab)
     db.session.commit()
+    ensure_drawers(new_cab)
 
     # Auto-select neu day la tu dau tien
     if Cabinet.query.count() == 1:
@@ -402,15 +408,23 @@ def api_time():
 
 @app.route('/api/cabinets/ping_all')
 def api_cabinets_ping_all():
-    """Ping tat ca tu thuoc de check online/offline."""
+    """Ping tat ca tu thuoc de check online/offline song song."""
+    from concurrent.futures import ThreadPoolExecutor
     cabinets = load_cabinets()
     results = {}
-    for cab in cabinets:
+    
+    def ping_cab(cab):
         try:
-            resp = requests.get(f"http://{cab['ip']}/status", timeout=2.5)
-            results[cab['id']] = {'online': resp.status_code == 200}
+            resp = requests.get(f"http://{cab['ip']}/status", timeout=1.5)
+            return cab['id'], (resp.status_code == 200)
         except Exception:
-            results[cab['id']] = {'online': False}
+            return cab['id'], False
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures_results = executor.map(ping_cab, cabinets)
+        for cab_id, online in futures_results:
+            results[cab_id] = {'online': online}
+            
     return jsonify(results)
 
 
@@ -635,31 +649,48 @@ def _generate_frames(cam_stream_url: str):
             # Process with MediaPipe
             annotated = proc.process_frame(frame)
 
-            # Neu phat hien hoan tat lan dau -> tat RE1 va luu log
-            if proc.status.get('finished') and not _re_triggered:
-                _re_triggered = True
-
-                def handle_finish(esp_ip_val, cab_uuid):
-                    with app.app_context():
-                        cab = Cabinet.query.filter_by(uuid=cab_uuid).first()
-                        if cab:
-                            new_log = MedicineLog(cabinet_id=cab.id, status='completed')
-                            db.session.add(new_log)
-                            db.session.commit()
-                            logging.info(f"[DB] Da luu log uong thuoc cho tu: {cab.name}")
-
-                        esp_re('off', esp_ip_val, drawer=0)
-
+            # Neu phat hien hoan tat lan dau -> tat RE va luu log
+            if proc.status.get('finished'):
                 active_cab = get_active_cabinet()
                 cab_uuid = active_cab['id'] if active_cab else None
+                
+                # Tim ngan dang active de tat LED va ghi log dung ngan
+                active_drawer_idx = 0  # default fallback
+                if _current_esp_ip:
+                    try:
+                        resp = requests.get(f"http://{_current_esp_ip}/status", timeout=1.2)
+                        if resp.status_code == 200:
+                            status_data = resp.json()
+                            for i in range(4):
+                                drawer_key = f"drawer{i+1}"
+                                if status_data.get(drawer_key, {}).get("session_active"):
+                                    active_drawer_idx = i
+                                    break
+                    except Exception as e:
+                        logging.warning(f"[DETECTION] Failed to fetch active drawer from ESP32: {e}")
 
-                threading.Thread(
-                    target=handle_finish,
-                    args=(_current_esp_ip, cab_uuid),
-                    daemon=True,
-                ).start()
+                lock_key = (cab_uuid, active_drawer_idx)
+                if not _re_triggered.get(lock_key, False):
+                    _re_triggered[lock_key] = True
 
-                logging.info("[DETECTION] Hoan thanh! Tat RE1 + luu log.")
+                    def handle_finish(esp_ip_val, cab_uuid_val, drawer_idx):
+                        with app.app_context():
+                            cab = Cabinet.query.filter_by(uuid=cab_uuid_val).first()
+                            if cab:
+                                new_log = MedicineLog(cabinet_id=cab.id, status='completed')
+                                db.session.add(new_log)
+                                db.session.commit()
+                                logging.info(f"[DB] Da luu log uong thuoc cho tu: {cab.name}, ngan: {drawer_idx + 1}")
+
+                            esp_re('off', esp_ip_val, drawer=drawer_idx)
+
+                    threading.Thread(
+                        target=handle_finish,
+                        args=(_current_esp_ip, cab_uuid, active_drawer_idx),
+                        daemon=True,
+                    ).start()
+
+                    logging.info(f"[DETECTION] Hoan thanh! Tat RE{active_drawer_idx + 1} + luu log.")
 
             # Encode to JPEG
             _, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
@@ -690,10 +721,9 @@ def _generate_frames(cam_stream_url: str):
 
 def _error_frame(msg: str):
     """Create a black frame with an error message."""
-    frame = cv2.rectangle(
-        cv2.UMat(480, 640, cv2.CV_8UC3).get(),
-        (0, 0), (640, 480), (20, 20, 20), -1
-    )
+    import numpy as np
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.rectangle(frame, (0, 0), (640, 480), (20, 20, 20), -1)
     cv2.putText(frame, "Loi ket noi camera", (30, 200),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (60, 60, 220), 2)
     cv2.putText(frame, msg[:70], (30, 250),
@@ -746,8 +776,16 @@ def reset_detection():
     global _re_triggered
     proc = processor()
     proc.reset()
-    _re_triggered = False
-    threading.Thread(target=esp_re, args=('off',), kwargs={'drawer': 0}, daemon=True).start()
+    _re_triggered = {}
+    
+    # Tat tat ca RE LED tren ESP32
+    esp_ip = get_active_esp_ip()
+    if esp_ip:
+        def off_all_drawers():
+            for i in range(4):
+                esp_re('off', esp_ip, drawer=i)
+        threading.Thread(target=off_all_drawers, daemon=True).start()
+        
     return jsonify({"status": "ok", "message": "Detector da reset, RE da tat"})
 
 
@@ -771,14 +809,143 @@ def re_proxy():
 @app.route('/history')
 def history():
     """Trang xem lich su uong thuoc."""
-    logs = MedicineLog.query.order_by(MedicineLog.timestamp.desc()).all()
+    cab = resolve_cabinet()
+    if cab:
+        logs = MedicineLog.query.filter_by(cabinet_id=cab.id).order_by(MedicineLog.timestamp.desc()).all()
+    else:
+        logs = []
     return render_template('history.html', logs=logs)
+
+
+def run_backend_scheduler():
+    """Luồng lập lịch chạy ngầm kiểm tra lịch uống thuốc tự động gửi lệnh mở ngăn."""
+    import time
+    from datetime import datetime
+    
+    logging.info("[SCHEDULER] Background scheduler thread started.")
+    triggered_today = {} # Key: (drawer_id, date_str, time_str)
+    
+    while True:
+        try:
+            with app.app_context():
+                now = datetime.now()
+                current_time_str = now.strftime("%H:%M")
+                current_date_str = now.strftime("%Y-%m-%d")
+                current_day = now.weekday() # 0 = Monday, ..., 6 = Sunday
+                
+                # Map Python weekday to DB day index (0 = Sunday, 1-6 = Mon-Sat)
+                db_day = (current_day + 1) % 7
+                
+                cabinets = Cabinet.query.all()
+                for cab in cabinets:
+                    drawers = Drawer.query.filter_by(cabinet_id=cab.id).all()
+                    for drawer in drawers:
+                        if not drawer.time:
+                            continue
+                        
+                        days_list = [int(d) for d in drawer.days.split(',')] if drawer.days else []
+                        if drawer.time == current_time_str and db_day in days_list:
+                            key = (drawer.id, current_date_str, current_time_str)
+                            if key not in triggered_today:
+                                triggered_today[key] = True
+                                logging.info(f"[SCHEDULER] Triggering drawer {drawer.index + 1} on cabinet {cab.name} (IP: {cab.ip})")
+                                
+                                # Kích hoạt mở ngăn trên ESP32 không chặn luồng chính
+                                def trigger_esp(esp_ip, idx):
+                                    try:
+                                        requests.get(f"http://{esp_ip}/open_drawer?idx={idx}", timeout=3.0)
+                                    except Exception as ex:
+                                        logging.warning(f"[SCHEDULER] Failed to trigger ESP32 at {esp_ip}: {ex}")
+                                        
+                                threading.Thread(target=trigger_esp, args=(cab.ip, drawer.index), daemon=True).start()
+                                
+            # Dọn dẹp bộ nhớ các khóa ngày cũ
+            for k in list(triggered_today.keys()):
+                if k[1] != current_date_str:
+                    triggered_today.pop(k, None)
+                    
+        except Exception as e:
+            logging.error(f"[SCHEDULER] Error in background scheduler: {e}")
+            
+        time.sleep(15) # Kiểm tra mỗi 15 giây
+
+
+@app.route('/api/notifications')
+def api_notifications():
+    """API lay danh sach thong bao va canh bao cua tu hien tai."""
+    from datetime import datetime, timedelta
+    cab = resolve_cabinet()
+    if not cab:
+        return jsonify([])
+
+    notifications = []
+
+    # 1. Kiem tra trang thai online/offline cua tu
+    online = False
+    try:
+        resp = requests.get(f"http://{cab.ip}/status", timeout=1.2)
+        online = (resp.status_code == 200)
+    except:
+        online = False
+
+    if not online:
+        notifications.append({
+            'type': 'danger',
+            'title': 'Mất kết nối tủ thuốc',
+            'desc': f'Không thể kết nối đến thiết bị tại IP {cab.ip}.',
+            'time': 'Thời gian thực'
+        })
+
+    # 2. Canh bao thuoc sap het (qty <= 5)
+    low_meds = Medication.query.join(Drawer).filter(
+        Drawer.cabinet_id == cab.id,
+        Medication.qty <= 5
+    ).all()
+    for med in low_meds:
+        drawer = Drawer.query.get(med.drawer_id)
+        notifications.append({
+            'type': 'warning',
+            'title': f'Sắp hết thuốc: {med.name}',
+            'desc': f'{drawer.name if drawer else "Ngăn tủ"} chỉ còn {med.qty} viên.',
+            'time': 'Cảnh báo số lượng'
+        })
+
+    # 3. Canh bao lo lich / loi AI trong 3 ngay qua
+    recent_limit = datetime.utcnow() - timedelta(days=3)
+    recent_warn_logs = MedicineLog.query.filter(
+        MedicineLog.cabinet_id == cab.id,
+        MedicineLog.status.in_(['missed', 'not_detect']),
+        MedicineLog.timestamp >= recent_limit
+    ).order_by(MedicineLog.timestamp.desc()).all()
+
+    for log in recent_warn_logs:
+        log_time_str = log.timestamp.strftime('%H:%M — %d/%m/%Y')
+        if log.status == 'missed':
+            notifications.append({
+                'type': 'danger',
+                'title': 'Lỡ lịch uống thuốc',
+                'desc': 'Hệ thống ghi nhận bạn đã bỏ lỡ lịch uống thuốc.',
+                'time': log_time_str
+            })
+        elif log.status == 'not_detect':
+            notifications.append({
+                'type': 'warning',
+                'title': 'AI không xác nhận',
+                'desc': 'Đã đóng ngăn tủ nhưng camera không quét được hành vi uống thuốc.',
+                'time': log_time_str
+            })
+
+    return jsonify(notifications)
 
 
 @app.route('/api/logs')
 def api_logs():
     """API lay lich su uong thuoc."""
-    logs = MedicineLog.query.order_by(MedicineLog.timestamp.desc()).all()
+    cab = resolve_cabinet()
+    if cab:
+        logs = MedicineLog.query.filter_by(cabinet_id=cab.id).order_by(MedicineLog.timestamp.desc()).all()
+    else:
+        logs = []
     return jsonify([log.to_dict() for log in logs])
 
 
@@ -801,6 +968,11 @@ def init_db():
                         )
                         db.session.add(new_cab)
                     db.session.commit()
+                    
+                    # Dam bao moi cabinet deu co du 4 ngan
+                    for cab in Cabinet.query.all():
+                        ensure_drawers(cab)
+                        
                 logging.info(f"Migrated {len(cabinets_data)} cabinets.")
             except Exception as e:
                 logging.error(f"Migration error: {e}")
@@ -809,4 +981,9 @@ def init_db():
 if __name__ == '__main__':
     print("Starting SmartMed Cabinet Server...")
     init_db()
+    
+    # Chỉ khởi chạy Thread trong tiến trình chính của Werkzeug để tránh chạy đúp khi Reload
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
+        threading.Thread(target=run_backend_scheduler, daemon=True).start()
+        
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -161,10 +161,20 @@
     <div class="log-list">
       {% if logs %}
         {% for log in logs %}
-          <div class="log-item">
-            <div class="log-icon">✅</div>
+          <div class="log-item" style="border-left: 5px solid {% if log.status == 'missed' or log.status == 'not_detect' %}#FF6B6B{% else %}#27AE60{% endif %}">
+            <div class="log-icon" style="background: {% if log.status == 'missed' or log.status == 'not_detect' %}#FFF0EE{% else %}#E8FDF5{% endif %}; color: {% if log.status == 'missed' or log.status == 'not_detect' %}#FF6B6B{% else %}#27AE60{% endif %};">
+              {% if log.status == 'missed' or log.status == 'not_detect' %}⚠️{% else %}✅{% endif %}
+            </div>
             <div class="log-info">
-              <div class="log-title">Quy trình uống thuốc hoàn tất</div>
+              <div class="log-title" style="color: {% if log.status == 'missed' or log.status == 'not_detect' %}#C0392B{% else %}#2C3E50{% endif %};">
+                {% if log.status == 'missed' %}
+                  Chưa uống thuốc (quá giờ quy định)
+                {% elif log.status == 'not_detect' %}
+                  Đã đóng tủ nhưng AI không xác nhận (10 phút)
+                {% else %}
+                  Quy trình uống thuốc hoàn tất
+                {% endif %}
+              </div>
               <div class="log-meta">
                 <span>📍 {{ log.cabinet.name }}</span>
                 <span>🔹 ID: #{{ log.id }}</span>

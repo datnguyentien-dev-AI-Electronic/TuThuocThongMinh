@@ -22,7 +22,7 @@ const int RE_PINS[4] = {25, 26, 27, 14}; // RE1..RE4
 const int BUZZER_PIN = 33;
 
 #define OU_SESSION_MS (30UL * 60UL * 1000UL) // 30 phut — khong bam nut
-#define AFTER_BTN_MS (30UL * 1000UL)      // 30 giay sau nut -> tat OU, bat RE
+#define AFTER_BTN_MS (5UL * 1000UL)       // 5 giay sau nut -> tat OU, bat RE
 #define AI_WAIT_MS (10UL * 60UL * 1000UL) // 10 phut cho AI sau khi bam nut
 
 DHT dht(DHTPIN, DHTTYPE);
@@ -241,7 +241,7 @@ void pollButton(int idx) {
     btnPhases[idx] = BTN_NORMAL;
     Serial.printf("[DRAWER] IN%d: HIGH -> LOW (Drawer Closed) — Hoan thanh chu ky mo-dong!\n",
                   idx + 1);
-    lcdPrint2Rows("Da dong ngan " + String(idx + 1), "Cho 30 giay...  ");
+    lcdPrint2Rows("Da dong ngan " + String(idx + 1), "Cho 5 giay...  ");
   }
 }
 

@@ -216,8 +216,16 @@ void setup() {
   
   // Bắt đầu kết nối WiFi với thông số vừa nhận
   WiFi.begin(ssid.c_str(), password.c_str());
-  while (WiFi.status() != WL_CONNECTED) {
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) { // 15 giay timeout
     delay(500);
+    attempts++;
+  }
+  
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("IP:FAILED"); // Bao ve ESP32 rang ket noi that bai
+    delay(1000);
+    ESP.restart(); // Restart de nghe lai WiFi config tu Serial
   }
   
   // ---> GỬI IP VỀ CHO ESP8266 <---

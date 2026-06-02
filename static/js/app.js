@@ -130,7 +130,16 @@ function renderHomeMeds() {
 }
 
 function updateNextDose(allMeds) {
-    if (!allMeds || allMeds.length === 0) return;
+    const timeEl = document.getElementById('next-alarm-time');
+    const nameEl = document.getElementById('next-alarm-name');
+    const dayEl = document.getElementById('next-alarm-day');
+
+    if (!allMeds || allMeds.length === 0) {
+        if (timeEl) timeEl.textContent = "--:--";
+        if (nameEl) nameEl.textContent = "Chưa có lịch";
+        if (dayEl) dayEl.textContent = "Tiếp theo:";
+        return;
+    }
 
     const now = new Date();
     const currentTime = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
@@ -144,16 +153,13 @@ function updateNextDose(allMeds) {
     }
 
     if (next) {
-        const timeEl = document.getElementById('next-alarm-time');
-        const nameEl = document.getElementById('next-alarm-name');
-        const dayEl = document.getElementById('next-alarm-day');
-        
         if (timeEl) timeEl.textContent = next.time;
         if (nameEl) nameEl.textContent = `💊 ${next.name}`;
         if (dayEl) dayEl.textContent = isTomorrow ? 'Ngày mai:' : 'Tiếp theo:';
     } else {
-        const nameEl = document.getElementById('next-alarm-name');
+        if (timeEl) timeEl.textContent = "--:--";
         if (nameEl) nameEl.textContent = "Chưa có lịch";
+        if (dayEl) dayEl.textContent = "Tiếp theo:";
     }
 }
 
@@ -201,42 +207,86 @@ async function pollHardwareStatus() {
     try {
         const res = await fetch('/api/hardware_status');
         const data = await res.json();
-        const d1 = data.drawer1 || {};
-        const ouEl = document.getElementById('hw-ou1');
-        const reEl = document.getElementById('hw-re1');
-        const inEl = document.getElementById('hw-in1');
-        const sesEl = document.getElementById('hw-session');
+        const tableBody = document.getElementById('hw-status-table-body');
         const resetBtn = document.getElementById('btn-reset-ou');
-        if (!ouEl) return;
+        if (!tableBody) return;
 
         if (!data.online) {
-            ouEl.textContent = reEl.textContent = inEl.textContent = '—';
-            if (sesEl) sesEl.textContent = 'Mất kết nối';
+            tableBody.innerHTML = `
+                <tr><td colspan="5" style="text-align:center;color:#E74C3C;padding:12px;font-weight:700">Mất kết nối với tủ thuốc</td></tr>
+            `;
             if (resetBtn) resetBtn.textContent = '📂 Mở tất cả ngăn (OU)';
             return;
         }
 
-        ouEl.textContent = hwOnOff(d1.ou1);
-        reEl.textContent = hwOnOff(d1.re1);
-        inEl.textContent = hwOnOff(d1.in1);
-        if (sesEl) {
-            if (d1.ou_all_on) sesEl.textContent = 'Mở thủ công (tất cả OU)';
-            else if (d1.missed) sesEl.textContent = 'Chưa uống (missed)';
-            else if (d1.not_detect) sesEl.textContent = 'Không xác nhận AI';
-            else if (d1.session_active) sesEl.textContent = d1.button_pressed ? 'Đã đóng tủ' : 'Đang chờ';
-            else sesEl.textContent = 'Nghỉ';
+        let tableHtml = '';
+        let ouAllOn = false;
+
+        for (let i = 1; i <= 4; i++) {
+            const drawer = data[`drawer${i}`] || {};
+            if (data.drawer1 && data.drawer1.ou_all_on) ouAllOn = true;
+
+            let sessionText = 'Nghỉ';
+            let statusClass = 'status-badge-grey';
+
+            if (drawer.missed) {
+                sessionText = 'Quá giờ';
+                statusClass = 'status-badge-red';
+            } else if (drawer.not_detect) {
+                sessionText = 'Lỗi AI';
+                statusClass = 'status-badge-orange';
+            } else if (drawer.session_active) {
+                sessionText = drawer.button_pressed ? 'Đã đóng tủ' : 'Đang chờ';
+                statusClass = 'status-badge-green';
+            }
+
+            const specificOu = data[`drawer${i}`]?.[`ou${i}`] || false;
+            const specificRe = data[`drawer${i}`]?.[`re${i}`] || false;
+            const specificIn = data[`drawer${i}`]?.[`in${i}`] || false;
+
+            tableHtml += `
+                <tr>
+                    <td style="font-weight:800;color:var(--text-muted)">Ngăn ${i.toString().padStart(2, '0')}</td>
+                    <td style="font-weight:700;color:${specificOu ? '#27AE60' : '#888'}">${hwOnOff(specificOu)}</td>
+                    <td style="font-weight:700;color:${specificRe ? '#E67E22' : '#888'}">${hwOnOff(specificRe)}</td>
+                    <td style="font-weight:700;color:${specificIn ? '#2980B9' : '#888'}">${specificIn ? 'MỞ' : 'ĐÓNG'}</td>
+                    <td><span class="status-badge-small ${statusClass}">${sessionText}</span></td>
+                </tr>
+            `;
+
+            // Cập nhật lớp CSS (active-drawer hoặc warning-drawer) cho khối ngăn tủ 3D mô phỏng
+            const drawer3d = document.querySelector(`.drawer-${i}`);
+            if (drawer3d) {
+                drawer3d.classList.remove('active-drawer', 'warning-drawer');
+                if (drawer.missed || drawer.not_detect) {
+                    drawer3d.classList.add('warning-drawer');
+                } else if (drawer.session_active) {
+                    drawer3d.classList.add('active-drawer');
+                }
+            }
         }
+
+        tableBody.innerHTML = tableHtml;
 
         if (resetBtn) {
-            resetBtn.textContent = d1.ou_all_on ? '⏹ Đóng tất cả ngăn (OU)' : '📂 Mở tất cả ngăn (OU)';
+            resetBtn.textContent = ouAllOn ? '⏹ Đóng tất cả ngăn (OU)' : '📂 Mở tất cả ngăn (OU)';
         }
 
-        // Den tren tu: xanh=OU, vang=RE, do=missed hoac not_detect
+        // Den tren tu: xanh=OU, vang=RE, do=missed hoac not_detect cua bat ky ngan nao
         const leds = document.querySelectorAll('.cabinet-top .cabinet-led');
         if (leds.length >= 3) {
-            leds[0].style.opacity = d1.ou1 ? '1' : '0.25';
-            leds[1].style.opacity = d1.re1 ? '1' : '0.25';
-            leds[2].style.opacity = (d1.missed || d1.not_detect) ? '1' : '0.25';
+            let isOuOn = false;
+            let isReOn = false;
+            let isError = false;
+            for (let i = 1; i <= 4; i++) {
+                const d = data[`drawer${i}`] || {};
+                if (data[`drawer${i}`]?.[`ou${i}`]) isOuOn = true;
+                if (data[`drawer${i}`]?.[`re${i}`]) isReOn = true;
+                if (d.missed || d.not_detect) isError = true;
+            }
+            leds[0].style.opacity = isOuOn ? '1' : '0.25';
+            leds[1].style.opacity = isReOn ? '1' : '0.25';
+            leds[2].style.opacity = isError ? '1' : '0.25';
         }
     } catch (e) {
         console.warn('[HW] Khong doc duoc trang thai:', e);
@@ -726,3 +776,85 @@ function runScheduler() {
 
 setInterval(runScheduler, 1000);
 runScheduler();
+
+// ===== NOTIFICATION SYSTEM =====
+let notifDropdownOpen = false;
+
+async function loadNotifications() {
+    try {
+        const res = await fetch('/api/notifications');
+        const notifs = await res.json();
+        
+        // Cập nhật Badge số lượng
+        const badge = document.getElementById('notif-badge');
+        if (badge) {
+            badge.textContent = notifs.length;
+            badge.style.display = notifs.length > 0 ? 'flex' : 'none';
+        }
+        
+        // Render danh sách thông báo
+        const listEl = document.getElementById('notif-list');
+        if (!listEl) return;
+        
+        if (notifs.length === 0) {
+            listEl.innerHTML = `
+                <div class="notif-empty">
+                    <div class="notif-empty-icon">🔔</div>
+                    <div style="font-weight:700;color:var(--text)">Không có thông báo mới</div>
+                    <div style="font-size:11px;margin-top:4px">Hệ thống đang hoạt động ổn định.</div>
+                </div>
+            `;
+            return;
+        }
+        
+        listEl.innerHTML = notifs.map(n => {
+            const iconClass = n.type === 'danger' ? 'notif-icon-danger' : 'notif-icon-warning';
+            const iconEmoji = n.type === 'danger' ? '❌' : '⚠️';
+            
+            return `
+                <div class="notif-item">
+                    <div class="notif-icon-wrap ${iconClass}">${iconEmoji}</div>
+                    <div class="notif-info">
+                        <div class="notif-title">${n.title}</div>
+                        <div class="notif-desc">${n.desc}</div>
+                        <div class="notif-time">🕒 ${n.time}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.warn('[NOTIF] Khong tai duoc thong bao:', e);
+    }
+}
+
+function toggleNotifDropdown(e) {
+    if (e) e.stopPropagation();
+    notifDropdownOpen = !notifDropdownOpen;
+    const dd = document.getElementById('notif-dropdown');
+    if (dd) {
+        dd.classList.toggle('open', notifDropdownOpen);
+    }
+    if (notifDropdownOpen) {
+        loadNotifications();
+    }
+}
+
+function closeNotifDropdown() {
+    notifDropdownOpen = false;
+    const dd = document.getElementById('notif-dropdown');
+    if (dd) {
+        dd.classList.remove('open');
+    }
+}
+
+// Đóng dropdown khi nhấp ra ngoài màn hình
+document.addEventListener('click', e => {
+    const wrapper = document.getElementById('notif-wrapper');
+    if (wrapper && !wrapper.contains(e.target)) {
+        closeNotifDropdown();
+    }
+});
+
+// Khởi chạy hệ thống thông báo ngay lập tức
+loadNotifications();
+setInterval(loadNotifications, 10000); // Polling mỗi 10 giây

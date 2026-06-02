@@ -13,6 +13,59 @@
 
   <!-- Custom Styles -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .hw-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .hw-table th, .hw-table td {
+      padding: 8px 6px;
+      text-align: left;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+    .hw-table th {
+      font-weight: 700;
+      color: var(--text-muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .status-badge-small {
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 700;
+      display: inline-block;
+    }
+    .status-badge-grey { background: #F3F3F3; color: #7F8C8D; }
+    .status-badge-green { background: #E8FDF5; color: #27AE60; }
+    .status-badge-red { background: #FFF0EE; color: #FF6B6B; }
+    .status-badge-orange { background: #FFF5E6; color: #E67E22; }
+
+    /* 3D Drawer active / warning styles */
+    .drawer.active-drawer {
+      box-shadow: 0 0 15px rgba(78, 205, 196, 0.6) !important;
+      border: 2px solid #4ECDC4 !important;
+      transform: translateZ(10px) scale(1.02);
+      animation: activePulse 2s infinite alternate;
+    }
+    .drawer.warning-drawer {
+      box-shadow: 0 0 15px rgba(255, 107, 107, 0.7) !important;
+      border: 2px solid #FF6B6B !important;
+      transform: translateZ(10px) scale(1.02);
+      animation: warningPulse 1.5s infinite alternate;
+    }
+    @keyframes activePulse {
+      from { box-shadow: 0 0 5px rgba(78, 205, 196, 0.4); }
+      to { box-shadow: 0 0 20px rgba(78, 205, 196, 0.8); }
+    }
+    @keyframes warningPulse {
+      from { box-shadow: 0 0 5px rgba(255, 107, 107, 0.4); }
+      to { box-shadow: 0 0 20px rgba(255, 107, 107, 0.9); }
+    }
+  </style>
 </head>
 
 <body data-cabinet-ip="{{ cabinet.ip if cabinet else '' }}">
@@ -100,7 +153,20 @@
             </div>
           </div>
 
-          <div class="btn-notif">🔔<div class="badge">2</div>
+          <!-- Notification Dropdown -->
+          <div class="notif-wrapper" id="notif-wrapper">
+            <button class="btn-notif" id="btn-notif" onclick="toggleNotifDropdown(event)">
+              🔔<div class="badge" id="notif-badge">0</div>
+            </button>
+            <div class="notif-dropdown" id="notif-dropdown">
+              <div class="notif-header">🔔 Thông báo & Cảnh báo</div>
+              <div class="notif-list" id="notif-list">
+                <!-- JS filled -->
+              </div>
+              <div class="notif-footer" onclick="showPage('settings', document.querySelector('[onclick*=\'settings\']')); closeNotifDropdown();">
+                ⚙️ Cấu hình cảnh báo
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -238,12 +304,22 @@
 
             <!-- Hardware status -->
             <div class="info-card" id="hw-status-card">
-              <div class="info-card-title">🔌 Trạng thái tủ (ngăn 1)</div>
-              <div id="hw-status-body" class="hw-status-grid">
-                <div class="hw-row"><span>OU1 (mở ngăn)</span><span id="hw-ou1" class="hw-val">—</span></div>
-                <div class="hw-row"><span>RE1 (nhắc)</span><span id="hw-re1" class="hw-val">—</span></div>
-                <div class="hw-row"><span>IN1 (nút)</span><span id="hw-in1" class="hw-val">—</span></div>
-                <div class="hw-row"><span>Phiên uống</span><span id="hw-session" class="hw-val">—</span></div>
+              <div class="info-card-title">🔌 Trạng thái 4 ngăn tủ</div>
+              <div id="hw-status-body">
+                <table class="hw-table">
+                  <thead>
+                    <tr>
+                      <th>Ngăn</th>
+                      <th>Mở (OU)</th>
+                      <th>Nhắc (RE)</th>
+                      <th>Công tắc</th>
+                      <th>Phiên</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hw-status-table-body">
+                    <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:10px;">Đang tải trạng thái...</td></tr>
+                  </tbody>
+                </table>
               </div>
               <button type="button" class="btn-save-schedule btn-reset-ou-home" id="btn-reset-ou" onclick="toggleOuReset()">
                 📂 Mở tất cả ngăn (OU)
